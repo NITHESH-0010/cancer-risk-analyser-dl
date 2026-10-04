@@ -5,7 +5,7 @@ from tensorflow.keras.regularizers import l2 as l2_reg
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.metrics import AUC, BinaryAccuracy
 
-def build_mlp(hidden_units, dropout, l2, lr):
+def build_mlp(hidden_units, dropout, l2, lr, input_dim=8):
     """
     Builds a Multilayer Perceptron (MLP) for binary classification.
     
@@ -14,10 +14,11 @@ def build_mlp(hidden_units, dropout, l2, lr):
         dropout (float): Dropout rate.
         l2 (float): L2 regularization factor.
         lr (float): Learning rate for Adam optimizer.
+        input_dim (int): Number of input features.
     """
     model = Sequential()
-    # Input layer for 8 features
-    model.add(Input(shape=(8,)))
+    # Input layer
+    model.add(Input(shape=(input_dim,)))
     
     for units in hidden_units:
         # Dense layer with ReLU: ReLU introduces non-linearity to learn complex patterns, avoiding vanishing gradient.
