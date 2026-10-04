@@ -28,3 +28,20 @@ In this updated version, binary columns are explicitly excluded from scaling and
 ## Original Repository
 Link to the original Machine Learning repository:
 [Cancer-Prediction-ML](https://github.com/NITHESH-0010/Cancer-Prediction-ML)
+
+
+## Deep Learning Approach
+A Multi-Layer Perceptron (MLP) was implemented using Keras. The architecture uses BatchNormalization, Dropout, and L2 regularization to prevent overfitting on this small dataset.
+A hyperparameter search was conducted on the validation set, and the best configuration was evaluated using multiple random seeds for robustness.
+
+### Deep Learning Results
+The test results and 5-fold cross-validation scores indicate the model's performance compared to classical ML models.
+*(See the CSV files in `results/` for full tabular metrics and standard deviations)*
+
+### Conclusion
+Tabular datasets of this size (~1500 rows) typically favor tree-based models like Gradient Boosting. The Deep Learning model performs competitively, but depending on the specific hyperparameters, it might only match or slightly underperform the tree ensembles. This confirms the standard wisdom that Neural Networks require larger datasets to significantly outperform boosted trees on tabular data.
+
+### Limitations
+- **Small Dataset:** Neural networks usually require more data to generalize effectively.
+- **Synthetic-looking Data:** Some feature relationships might not perfectly mimic real-world clinical distributions.
+- **Not a Clinical Tool:** This model is for educational and demonstrative purposes only and should not be used for actual medical diagnosis.
