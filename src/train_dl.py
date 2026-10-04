@@ -13,6 +13,7 @@ from sklearn.utils.class_weight import compute_class_weight
 
 from model import build_mlp
 from search import CONFIGS
+from features import ComplexFeatureEncoder, QuantilePiecewiseLinearEncoder
 
 def set_seeds(seed=42):
     os.environ['PYTHONHASHSEED'] = str(seed)
@@ -97,15 +98,33 @@ def train_and_evaluate_final():
     weights = compute_class_weight('balanced', classes=classes, y=y_train)
     class_weight = {cls: weight for cls, weight in zip(classes, weights)}
     
-    # Read best config from arch_search.csv
-    try:
-        arch_df = pd.read_csv('results/arch_search.csv')
-        best_config_name = arch_df.loc[arch_df['Mean Val AUC'].idxmax()]['Config']
-    except:
-        best_config_name = 'D' # Fallback
+    # Read best config from arch_search_v2.csv
+    if not os.path.exists('results/arch_search_v2.csv'):
+        raise FileNotFoundError("results/arch_search_v2.csv not found. Run search.py first.")
+        
+    arch_df = pd.read_csv('results/arch_search_v2.csv')
+    encoded_df = arch_df[arch_df['Encoded'] == True]
+    best_config_name = encoded_df.loc[encoded_df['Mean Val AUC'].idxmax()]['Config']
         
     print(f"Using best config: {best_config_name}")
     config = CONFIGS[best_config_name]
+    
+    is_encoded = config.pop('encoded')
+    use_cw = config.pop('use_class_weight')
+    cw = class_weight if use_cw else None
+    
+    if is_encoded:
+        import joblib
+        encoder = joblib.load('models/feature_encoder.pkl')
+        train_raw = np.load('data_splits/train_raw.npz')
+        val_raw = np.load('data_splits/val_raw.npz')
+        test_raw = np.load('data_splits/test_raw.npz')
+        
+        X_train = encoder.transform(train_raw['X'])
+        X_val = encoder.transform(val_raw['X'])
+        X_test = encoder.transform(test_raw['X'])
+    
+    input_dim = X_train.shape[1]
     
     seeds = [1, 2, 3, 4, 5]
     results = []
@@ -119,7 +138,7 @@ def train_and_evaluate_final():
         print(f"--- Training with seed {seed} ---")
         set_seeds(seed)
         
-        model = build_mlp(**config)
+        model = build_mlp(input_dim=input_dim, **config)
         
         early_stopping = EarlyStopping(
             monitor='val_loss', patience=20, restore_best_weights=True, verbose=0
@@ -133,7 +152,7 @@ def train_and_evaluate_final():
             validation_data=(X_val, y_val),
             epochs=100,
             batch_size=32,
-            class_weight=class_weight,
+            class_weight=cw,
             callbacks=[early_stopping, reduce_lr],
             verbose=0
         )
@@ -143,7 +162,7 @@ def train_and_evaluate_final():
         
         if val_loss < best_val_loss_overall:
             best_val_loss_overall = val_loss
-            model.save('models/cancer_dl_model.keras')
+            model.save('models/cancer_dl_model_v2.keras')
             # Plot only for the best seed
             plot_history(history, 'results/dl_best')
             
