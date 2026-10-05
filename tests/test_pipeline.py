@@ -109,3 +109,37 @@ def test_explain_one(dummy_data):
         # Check tolerance instead of asserting monotonic
         if res['Smoking']['p_new'] > p_full + 1e-4:
             print(f"Warning: Model is not monotonic for Smoking! Original: {p_full:.4f}, Without smoking: {res['Smoking']['p_new']:.4f}")
+
+def test_shapley_logic():
+    from shapley import compute_exact_shapley, what_if
+    import pandas as pd
+    import numpy as np
+    
+    # 20 random test rows for additivity
+    test_raw = np.load(os.path.join(base_dir, 'data_splits', 'test_raw.npz'))
+    X_test = test_raw['X']
+    cols = ['Age', 'Gender', 'BMI', 'Smoking', 'GeneticRisk', 'PhysicalActivity', 'AlcoholIntake', 'CancerHistory']
+    df_test = pd.DataFrame(X_test, columns=cols)
+    
+    sample_df = df_test.sample(20, random_state=42)
+    for i in range(20):
+        row = sample_df.iloc[[i]]
+        base, contribs, final = compute_exact_shapley(row)
+        assert abs(base + sum(contribs.values()) - final) < 1e-4
+        
+    # High-risk profile B
+    row_B = pd.DataFrame([{
+        'Age': 65, 'Gender': 1, 'BMI': 35, 'Smoking': 1, 'GeneticRisk': 2, 
+        'PhysicalActivity': 1, 'AlcoholIntake': 4, 'CancerHistory': 1
+    }])
+    
+    base_B, contribs_B, final_B = compute_exact_shapley(row_B)
+    
+    # at least 3 contributions exceed 1 percentage point in absolute value
+    large_contribs = sum(1 for v in contribs_B.values() if abs(v) > 1.0)
+    assert large_contribs >= 3, f"Expected at least 3 large contributions, got {large_contribs}\nContribs: {contribs_B}"
+    
+    res = what_if(row_B)
+    assert 'Smoking' in res
+    assert 'new_prob' in res['Smoking']
+    assert 'pts_change' in res['Smoking']
