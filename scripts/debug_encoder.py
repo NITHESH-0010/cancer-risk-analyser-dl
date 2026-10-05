@@ -12,9 +12,26 @@ def debug():
     train_data = np.load('data_splits/train_raw.npz')
     X_train_raw = train_data['X']
     
+    # Reconstruct feature names
+    # 1. One-hot
+    oh_names = encoder.onehot.get_feature_names_out().tolist()
+    # 2. Piecewise
+    pw_names = []
+    for col in encoder.piecewise_cols:
+        for i in range(encoder.piecewise.n_bins):
+            pw_names.append(f"{col}_bin_{i}")
+    # 3. Passthrough
+    pt_names = encoder.passthrough_cols
+    
+    feature_names = oh_names + pw_names + pt_names
+    
     X_enc_array = encoder.transform(X_train_raw)
     
-    print("--- Encoder Output Shape ---")
+    print("--- Encoded Feature Names/Order ---")
+    for i, name in enumerate(feature_names):
+        print(f"Col {i}: {name}")
+        
+    print("\n--- Encoder Output Shape ---")
     print(X_enc_array.shape)
     
     print("\n--- Standard Deviation of Encoded Columns ---")
@@ -25,11 +42,15 @@ def debug():
             print(f"  -> BUG: Column {i} has std 0.0!")
             
     print("\n--- Sample Rows (Raw vs Encoded) ---")
+    # For printing raw vs encoded properly
+    raw_cols = encoder.raw_columns
     for i in range(5):
         print(f"Row {i} Raw:")
-        print(X_train_raw[i])
+        for j, val in enumerate(X_train_raw[i]):
+            print(f"  {raw_cols[j]}: {val}")
         print(f"Row {i} Enc:")
-        print(X_enc_array[i])
+        for j, val in enumerate(X_enc_array[i]):
+            print(f"  {feature_names[j]}: {val:.4f}")
         print()
         
     try:
