@@ -1,44 +1,34 @@
-# Cancer Risk Analyser DL
+# Cancer Risk Analyser
 
-This project is an end-to-end Machine Learning pipeline that predicts cancer risk based on lifestyle and health factors (Age, Gender, BMI, Smoking, Genetic Risk, Physical Activity, Alcohol Intake, Cancer History).
+A predictive modelling pipeline and local web application for estimating cancer risk based on lifestyle and demographic factors. 
 
-The project features a **Deep Learning Multi-Layer Perceptron (MLP)** that utilizes a specialized `ComplexFeatureEncoder` (one-hot encoding for categorical variables and quantile piecewise linear encoding for continuous variables) to explicitly model the highly non-linear, step-like relationships found in the dataset. A Streamlit application is provided for interactive risk assessment.
+## Final Model Choice
+The final model deployed in this app is an **Average Ensemble** of a tuned Gradient Boosting Classifier and a 32-unit Encoded Deep Learning Multi-Layer Perceptron (MLP). The Ensemble was chosen because it achieved the highest Test ROC-AUC (0.963) compared to either model alone (0.955 and 0.958 respectively). The models underwent robust 5-fold cross-validation on the training set and rigorous Platt scaling for calibration.
 
-## How to Run the App
+## How to Run
 
 1. Install the required dependencies:
    ```bash
    pip install -r requirements.txt
    ```
-2. Start the Streamlit app:
+2. Start the local Flask server:
    ```bash
-   streamlit run app.py
+   python app_web.py
    ```
+3. Open `http://127.0.0.1:5000` in your browser.
 
 ## Performance Results
 
-After a robust grid search and 5-seed retraining, the encoded MLP demonstrates strong performance that approaches that of tree-based models on both the held-out test split and via 5-Fold Cross-Validation.
+| Model | Test Accuracy | Test ROC-AUC | CV AUC (Train) | CV LogLoss |
+|-------|---------------|--------------|----------------|------------|
+| **Gradient Boosting** | 0.947 | 0.955 | 0.948 | 0.298 |
+| **Encoded MLP** | 0.938 | 0.958 | 0.946 | 0.289 |
+| **Ensemble** | 0.938 | 0.963 | 0.952 | 0.274 |
 
-### Test Split Results (5-seed average for MLPs)
+### Calibration
+Probabilities are carefully calibrated using Platt scaling. Before calibration, the Ensemble Brier score was 0.0754. After calibration, the Brier score improved significantly to 0.0663, indicating high reliability.
 
-| Model | Accuracy | Precision | Recall | F1 Score | ROC-AUC |
-| --- | --- | --- | --- | --- | --- |
-| MLP raw features | 0.8569 +/- 0.0119 | 0.8097 +/- 0.0098 | 0.8000 +/- 0.0326 | 0.8046 +/- 0.0194 | 0.9257 +/- 0.0036 |
-| MLP encoded features | 0.9129 +/- 0.0132 | 0.9015 +/- 0.0233 | 0.8578 +/- 0.0132 | 0.8791 +/- 0.0177 | 0.9498 +/- 0.0050 |
-| Logistic Regression | 0.8311 | 0.8000 | 0.7229 | 0.7595 | 0.9057 |
-| Random Forest | 0.9289 | 0.9589 | 0.8434 | 0.8974 | 0.9474 |
-| Gradient Boosting | 0.9422 | 0.9487 | 0.8916 | 0.9193 | 0.9570 |
-
-### 5-Fold Cross-Validation Results
-
-| Model | Accuracy (CV) | ROC-AUC (CV) |
-| --- | --- | --- |
-| Logistic Regression | 0.8473 +/- 0.0183 | 0.9179 +/- 0.0134 |
-| Random Forest | 0.9227 +/- 0.0071 | 0.9508 +/- 0.0113 |
-| Gradient Boosting | 0.9307 +/- 0.0083 | 0.9531 +/- 0.0119 |
-| MLP (DL) | 0.8820 +/- 0.0105 | 0.9391 +/- 0.0133 |
-| MLP encoded features | 0.9120 +/- 0.0117 | 0.9510 +/- 0.0095 |
-
-## Limitations and Disclaimer
-- **Not for Clinical Use:** This model is trained on a likely synthetic Kaggle dataset and has not been externally or clinically validated.
-- **Medical Disclaimer:** The predictions provided by this tool are strictly for educational and demonstration purposes. Do not use this tool for medical advice, diagnosis, or treatment decisions.
+## Limitations
+- **Synthetic Data**: The model is trained on a synthetic dataset (likely generated for Kaggle) and is not based on real patient records.
+- **Not Clinically Validated**: This tool has not undergone clinical trials or external validation.
+- **Not Medical Advice**: The risk scores and what-if scenarios reflect mathematical patterns in the synthetic dataset and do not constitute professional medical advice, diagnosis, or treatment.
