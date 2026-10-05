@@ -12,7 +12,7 @@ from sklearn.metrics import accuracy_score, roc_auc_score
 from data import load_and_verify_data
 from model import build_mlp
 from search import CONFIGS, set_seeds
-from features import ComplexFeatureEncoder
+from features import ComplexFeatureEncoder, encode
 
 def make_ablation():
     # Load baselines
@@ -85,8 +85,9 @@ def perform_cv_encoded():
         
         # Fit encoder INSIDE each fold to avoid leakage
         encoder = ComplexFeatureEncoder(n_bins=8)
-        X_train_encoded = encoder.fit_transform(X_train)
-        X_test_encoded = encoder.transform(X_test)
+        encoder.fit(X_train)
+        X_train_encoded = encode(X_train, encoder)
+        X_test_encoded = encode(X_test, encoder)
         
         set_seeds(42 + fold)
         tf.keras.backend.clear_session()

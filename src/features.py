@@ -65,8 +65,20 @@ class ComplexFeatureEncoder(BaseEstimator, TransformerMixin):
         self.piecewise_cols = ['Age', 'BMI', 'PhysicalActivity', 'AlcoholIntake']
         self.passthrough_cols = ['Gender', 'Smoking', 'CancerHistory']
         
+        # The true order of features in the raw dataset
+        self.raw_columns = ['Age', 'Gender', 'BMI', 'Smoking', 'GeneticRisk', 'PhysicalActivity', 'AlcoholIntake', 'CancerHistory']
+        
+    def _to_dataframe(self, X):
+        if isinstance(X, pd.DataFrame):
+            # Ensure columns are in the expected order
+            return X[self.raw_columns].copy()
+        elif isinstance(X, np.ndarray):
+            return pd.DataFrame(X, columns=self.raw_columns)
+        else:
+            raise ValueError("Input must be a pandas DataFrame or numpy array")
+            
     def fit(self, X, y=None):
-        X_df = pd.DataFrame(X, columns=self.onehot_col.split() + self.piecewise_cols + self.passthrough_cols if isinstance(X, np.ndarray) else X.columns)
+        X_df = self._to_dataframe(X)
         
         # Fit onehot
         self.onehot.fit(X_df[[self.onehot_col]])
@@ -92,9 +104,16 @@ class ComplexFeatureEncoder(BaseEstimator, TransformerMixin):
         return np.hstack([oh_encoded, pw_encoded, pt_encoded])
         
     def transform(self, X, y=None):
-        X_df = pd.DataFrame(X, columns=self.onehot_col.split() + self.piecewise_cols + self.passthrough_cols if isinstance(X, np.ndarray) else X.columns)
+        X_df = self._to_dataframe(X)
         X_transformed = self._transform_without_scale(X_df)
         return self.scaler.transform(X_transformed)
+
+def encode(raw_df_or_array, encoder):
+    """
+    Shared pipeline function to encode raw data using the fitted encoder.
+    Used by search, train, compare, explain, and app.
+    """
+    return encoder.transform(raw_df_or_array)
 
 
 def regenerate_raw_splits_and_encode():

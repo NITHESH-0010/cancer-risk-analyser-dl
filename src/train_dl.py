@@ -13,7 +13,7 @@ from sklearn.utils.class_weight import compute_class_weight
 
 from model import build_mlp
 from search import CONFIGS
-from features import ComplexFeatureEncoder, QuantilePiecewiseLinearEncoder
+from features import ComplexFeatureEncoder, QuantilePiecewiseLinearEncoder, encode
 
 def set_seeds(seed=42):
     os.environ['PYTHONHASHSEED'] = str(seed)
@@ -120,9 +120,9 @@ def train_and_evaluate_final():
         val_raw = np.load('data_splits/val_raw.npz')
         test_raw = np.load('data_splits/test_raw.npz')
         
-        X_train = encoder.transform(train_raw['X'])
-        X_val = encoder.transform(val_raw['X'])
-        X_test = encoder.transform(test_raw['X'])
+        X_train = encode(train_raw['X'], encoder)
+        X_val = encode(val_raw['X'], encoder)
+        X_test = encode(test_raw['X'], encoder)
     
     input_dim = X_train.shape[1]
     
@@ -137,6 +137,7 @@ def train_and_evaluate_final():
     for seed in seeds:
         print(f"--- Training with seed {seed} ---")
         set_seeds(seed)
+        tf.keras.backend.clear_session()
         
         model = build_mlp(input_dim=input_dim, **config)
         

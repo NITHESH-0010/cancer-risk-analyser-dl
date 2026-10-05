@@ -9,7 +9,7 @@ from sklearn.utils.class_weight import compute_class_weight
 import joblib
 
 from model import build_mlp
-from features import ComplexFeatureEncoder, QuantilePiecewiseLinearEncoder
+from features import ComplexFeatureEncoder, QuantilePiecewiseLinearEncoder, encode
 
 # Candidate configs
 CONFIGS = {
@@ -46,8 +46,8 @@ def perform_search():
     
     # Load encoder
     encoder = joblib.load('models/feature_encoder.pkl')
-    X_train_encoded = encoder.transform(X_train_raw)
-    X_val_encoded = encoder.transform(X_val_raw)
+    X_train_encoded = encode(X_train_raw, encoder)
+    X_val_encoded = encode(X_val_raw, encoder)
     
     # Compute class weights
     classes = np.unique(y_train)
@@ -65,7 +65,11 @@ def perform_search():
     results = []
     seeds = [42, 123, 999]
     
+    # Candidate configs (only E-H)
+    # We will combine this with old A-D
     for config_name, config_params in CONFIGS.items():
+        if config_name in ['A', 'B', 'C', 'D']:
+            continue
         print(f"\n--- Testing Config {config_name} ---")
         auc_scores = []
         recall_scores = []
@@ -84,6 +88,7 @@ def perform_search():
         
         for seed in seeds:
             set_seeds(seed)
+            tf.keras.backend.clear_session()
             model = build_mlp(input_dim=input_dim, **config_params)
             
             model.fit(
@@ -128,7 +133,11 @@ def perform_search():
         config_params['encoded'] = is_encoded
         config_params['use_class_weight'] = use_cw
         
-    results_df = pd.DataFrame(results)
+    results_df_new = pd.DataFrame(results)
+    old_df = pd.read_csv('results/arch_search_v2.csv')
+    old_ad = old_df[old_df['Config'].isin(['A', 'B', 'C', 'D'])]
+    
+    results_df = pd.concat([old_ad, results_df_new], ignore_index=True)
     os.makedirs('results', exist_ok=True)
     results_df.to_csv('results/arch_search_v2.csv', index=False)
     
