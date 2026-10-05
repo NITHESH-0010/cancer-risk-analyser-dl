@@ -125,6 +125,8 @@ def perform_cv_encoded():
         'ROC-AUC (CV)': f"{auc_mean:.4f} +/- {auc_std:.4f}"
     }])
     
+    # Remove old 'MLP encoded features' row if it exists
+    cv_df = cv_df[cv_df['Model'] != 'MLP encoded features']
     cv_df = pd.concat([cv_df, new_row], ignore_index=True)
     cv_df.to_csv('results/cv_comparison.csv', index=False)
     print(cv_df)
