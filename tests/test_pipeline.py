@@ -84,19 +84,28 @@ def test_explain_one(dummy_data):
     encoder = load_encoder(os.path.join(base_dir, 'models', 'feature_encoder.pkl'))
     model = load_dl_model(os.path.join(base_dir, 'models', 'cancer_dl_model_v2.keras'))
     
-    # Take second row (Smoking=1)
-    row = dummy_data.iloc[[1]]
-    p_full, contributions = factor_contributions(row, model, encoder, data_path='dataset/cancer_data.csv')
+    # Exact profile B from instructions
+    row = pd.DataFrame([{
+        'Age': 65, 'Gender': 1, 'BMI': 35, 'Smoking': 1, 'GeneticRisk': 2, 
+        'PhysicalActivity': 1, 'AlcoholIntake': 4, 'CancerHistory': 1
+    }])
+    
+    p_full, contrib_lo, contrib_prob = factor_contributions(row, model, encoder, data_path='dataset/cancer_data.csv')
     
     # contributions sum is finite
-    assert np.isfinite(sum(contributions.values()))
+    assert np.isfinite(sum(contrib_lo.values()))
+    assert np.isfinite(sum(contrib_prob.values()))
+    
+    # For profile B, at least 3 contributions have absolute value > 0.05 on the log-odds scale
+    large_contribs = sum(1 for v in contrib_lo.values() if abs(v) > 0.05)
+    assert large_contribs >= 3, f"Expected at least 3 large log-odds contributions, got {large_contribs}\nContribs: {contrib_lo}"
     
     res = what_if(row, model, encoder, data_path='dataset/cancer_data.csv')
     
     for k, v in res.items():
-        assert 0.0 <= v <= 1.0, f"{k} what_if value out of range"
+        assert 0.0 <= v['p_new'] <= 1.0, f"{k} what_if p_new out of range"
         
     if 'Smoking' in res:
         # Check tolerance instead of asserting monotonic
-        if res['Smoking'] > p_full + 1e-4:
-            print(f"Warning: Model is not monotonic for Smoking! Original: {p_full:.4f}, Without smoking: {res['Smoking']:.4f}")
+        if res['Smoking']['p_new'] > p_full + 1e-4:
+            print(f"Warning: Model is not monotonic for Smoking! Original: {p_full:.4f}, Without smoking: {res['Smoking']['p_new']:.4f}")

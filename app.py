@@ -153,10 +153,19 @@ with tab1:
         }])
         
         # 1. Explanation Logic
-        p_full, contributions = factor_contributions(input_data, model, encoder)
+        p_full, contributions_lo, contributions_prob = factor_contributions(input_data, model, encoder)
         what_if_res = what_if(input_data, model, encoder)
         
         st.markdown("---")
+        
+        # Formatting function for probability
+        def format_prob(p):
+            if p < 0.01:
+                return "<1%"
+            elif p > 0.99:
+                return ">99%"
+            else:
+                return f"{p * 100:.1f}%"
         
         # 2. Result Section
         if p_full < 0.33:
@@ -172,7 +181,7 @@ with tab1:
         st.markdown(f"""
         <div class="risk-card {risk_class}">
             <h2>Predicted Risk Band: {risk_text}</h2>
-            <div class="risk-score">{p_full * 100:.1f}%</div>
+            <div class="risk-score">{format_prob(p_full)}</div>
         </div>
         """, unsafe_allow_html=True)
         st.progress(float(p_full))
@@ -182,9 +191,10 @@ with tab1:
         
         st.markdown("---")
         st.markdown("### Factors behind this score")
+        st.caption("Bigger bar = bigger push; scores are shown on a scale that does not saturate at 0% or 100%.")
         
         # Plot contributions
-        c_series = pd.Series(contributions).sort_values()
+        c_series = pd.Series(contributions_lo).sort_values()
         
         fig, ax = plt.subplots(figsize=(8, 5))
         fig.patch.set_alpha(0.0) # Transparent bg
@@ -192,7 +202,7 @@ with tab1:
         
         colors = ['#ff416c' if x > 0 else '#56ab2f' for x in c_series.values]
         c_series.plot(kind='barh', color=colors, ax=ax)
-        ax.set_xlabel('Contribution to Score (probability delta)')
+        ax.set_xlabel('Effect on risk score (log-odds)')
         ax.tick_params(axis='both', colors='#ccd6f6')
         ax.xaxis.label.set_color('#ccd6f6')
         
@@ -220,11 +230,17 @@ with tab1:
         
         def display_what_if(factor, text, key):
             if key in what_if_res:
-                new_p = what_if_res[key]
-                if new_p < p_full - 0.001:
-                    st.success(f"- **{factor}:** {text} Estimated new score: {new_p*100:.1f}%.")
+                res = what_if_res[key]
+                new_p = res['p_new']
+                delta_lo = res['delta_lo']
+                
+                if delta_lo > 0.1:
+                    if new_p > 0.99:
+                        st.success(f"- **{factor}:** {text} The score stays very high even with this change, but the risk score still drops by {delta_lo:.2f} on the log-odds scale.")
+                    else:
+                        st.success(f"- **{factor}:** {text} Estimated new score: {format_prob(new_p)} (risk score drops by {delta_lo:.2f}).")
                 else:
-                    st.info(f"- **{factor}:** {text} Changing this factor does not show an improvement in the model's score for your specific profile.")
+                    st.info(f"- **{factor}:** {text} Changing this factor shows no improvement in the model's score for your specific profile.")
         
         display_what_if("Smoking", "Stopping smoking generally supports better overall health.", "Smoking")
         display_what_if("Alcohol Intake", "Moderating alcohol intake can contribute to long-term wellness.", "AlcoholIntake")
@@ -232,7 +248,9 @@ with tab1:
         display_what_if("BMI", "Maintaining a healthy weight can positively impact well-being.", "BMI")
         
         if 'Combined' in what_if_res:
-            st.markdown(f"**Combined Impact:** Adopting all applicable lifestyle changes above could shift the score to **{what_if_res['Combined']*100:.1f}%**.")
+            res_c = what_if_res['Combined']
+            new_p_c = res_c['p_new']
+            st.markdown(f"**Combined Impact:** Adopting all applicable lifestyle changes above could shift the score to **{format_prob(new_p_c)}**.")
             
         st.markdown("**Not changeable:**")
         st.markdown("Age, Gender, Genetic Risk, and Cancer History are fixed factors.")

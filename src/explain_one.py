@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import os
 import sys
+import tensorflow as tf
 
 # Ensure src is in the path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -15,13 +16,12 @@ def get_baselines_and_quartiles(df=None, data_path='dataset/cancer_data.csv'):
     baseline = {}
     quartiles = {}
     
-    # Categorical mode, Numeric median
     for col in df.columns:
         if col == 'Diagnosis':
             continue
-        if df[col].nunique() <= 3: # Categorical
+        if df[col].nunique() <= 3:
             baseline[col] = df[col].mode()[0]
-        else: # Numeric
+        else:
             baseline[col] = df[col].median()
             
         quartiles[col] = {
@@ -32,54 +32,77 @@ def get_baselines_and_quartiles(df=None, data_path='dataset/cancer_data.csv'):
         }
     return baseline, quartiles
 
+def get_logit(p):
+    p_clipped = np.clip(p, 1e-6, 1 - 1e-6)
+    return float(np.log(p_clipped / (1 - p_clipped)))
+
+def get_true_logit(df, model, encoder):
+    """Extracts true pre-sigmoid logit to bypass float32 saturation at 1.0"""
+    encoded = encode(df, encoder)
+    penultimate = tf.keras.Model(inputs=model.inputs, outputs=model.layers[-2].output)
+    out = penultimate.predict(encoded, verbose=0)
+    W, b = model.layers[-1].get_weights()
+    return float(np.dot(out, W)[0][0] + b[0])
+
 def factor_contributions(raw_row_df, model, encoder, baseline=None, data_path='dataset/cancer_data.csv'):
     if baseline is None:
         baseline, _ = get_baselines_and_quartiles(data_path=data_path)
         
     encoded_full = encode(raw_row_df, encoder)
-    p_full = model.predict(encoded_full, verbose=0)[0][0]
+    p_full = float(model.predict(encoded_full, verbose=0)[0][0])
     
-    contributions = {}
+    # We use true logit to avoid exact 0.0 diffs when p_full and p_replaced are both exactly 1.0
+    logit_full = get_true_logit(raw_row_df, model, encoder)
+    
+    contributions_lo = {}
+    contributions_prob = {}
     for col in raw_row_df.columns:
         replaced_row = raw_row_df.copy()
         replaced_row[col] = baseline[col]
-        encoded_replaced = encode(replaced_row, encoder)
-        p_replaced = model.predict(encoded_replaced, verbose=0)[0][0]
-        delta = p_full - p_replaced
-        contributions[col] = float(delta)
         
-    return float(p_full), contributions
+        encoded_replaced = encode(replaced_row, encoder)
+        p_replaced = float(model.predict(encoded_replaced, verbose=0)[0][0])
+        logit_replaced = get_true_logit(replaced_row, model, encoder)
+        
+        delta_prob = p_full - p_replaced
+        delta_lo = logit_full - logit_replaced
+        
+        contributions_prob[col] = float(delta_prob)
+        contributions_lo[col] = float(delta_lo)
+        
+    return p_full, contributions_lo, contributions_prob
 
 def what_if(raw_row_df, model, encoder, quartiles=None, data_path='dataset/cancer_data.csv'):
     if quartiles is None:
         _, quartiles = get_baselines_and_quartiles(data_path=data_path)
         
+    p_full = float(model.predict(encode(raw_row_df, encoder), verbose=0)[0][0])
+    logit_full = get_true_logit(raw_row_df, model, encoder)
+    
     results = {}
     
-    # Smoking -> 0
+    def evaluate_what_if(key, row):
+        p_new = float(model.predict(encode(row, encoder), verbose=0)[0][0])
+        logit_new = get_true_logit(row, model, encoder)
+        results[key] = {'p_new': p_new, 'delta_lo': float(logit_full - logit_new)}
+        
     if raw_row_df['Smoking'].iloc[0] != 0:
         row = raw_row_df.copy()
         row['Smoking'] = 0
-        p_smoke = model.predict(encode(row, encoder), verbose=0)[0][0]
-        results['Smoking'] = float(p_smoke)
+        evaluate_what_if('Smoking', row)
         
-    # AlcoholIntake -> lower quartile
     lower_alc = quartiles['AlcoholIntake']['q25']
     if raw_row_df['AlcoholIntake'].iloc[0] > lower_alc:
         row = raw_row_df.copy()
         row['AlcoholIntake'] = lower_alc
-        p_alc = model.predict(encode(row, encoder), verbose=0)[0][0]
-        results['AlcoholIntake'] = float(p_alc)
+        evaluate_what_if('AlcoholIntake', row)
         
-    # PhysicalActivity -> upper quartile
     upper_pa = quartiles['PhysicalActivity']['q75']
     if raw_row_df['PhysicalActivity'].iloc[0] < upper_pa:
         row = raw_row_df.copy()
         row['PhysicalActivity'] = upper_pa
-        p_pa = model.predict(encode(row, encoder), verbose=0)[0][0]
-        results['PhysicalActivity'] = float(p_pa)
+        evaluate_what_if('PhysicalActivity', row)
         
-    # BMI -> clamp into 18.5 - 24.9
     bmi = raw_row_df['BMI'].iloc[0]
     new_bmi = None
     if bmi > 24.9:
@@ -90,10 +113,8 @@ def what_if(raw_row_df, model, encoder, quartiles=None, data_path='dataset/cance
     if new_bmi is not None and quartiles['BMI']['min'] <= new_bmi <= quartiles['BMI']['max']:
         row = raw_row_df.copy()
         row['BMI'] = new_bmi
-        p_bmi = model.predict(encode(row, encoder), verbose=0)[0][0]
-        results['BMI'] = float(p_bmi)
+        evaluate_what_if('BMI', row)
         
-    # All changes combined
     combined_row = raw_row_df.copy()
     changed = False
     if raw_row_df['Smoking'].iloc[0] != 0:
@@ -110,7 +131,6 @@ def what_if(raw_row_df, model, encoder, quartiles=None, data_path='dataset/cance
         changed = True
         
     if changed:
-        p_comb = model.predict(encode(combined_row, encoder), verbose=0)[0][0]
-        results['Combined'] = float(p_comb)
+        evaluate_what_if('Combined', combined_row)
         
     return results
