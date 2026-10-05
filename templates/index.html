@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cancer Risk Analyser</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg-body: #f8fafc;
+            --bg-card: #ffffff;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+            --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            margin: 0;
+            background: var(--bg-body);
+            color: var(--text-main);
+            line-height: 1.5;
+        }
+        .header {
+            background: linear-gradient(135deg, #1e293b, #0f172a);
+            color: white;
+            padding: 2rem 1rem;
+            text-align: center;
+        }
+        .header h1 { margin: 0 0 0.5rem 0; font-weight: 700; }
+        .header p { margin: 0; color: #cbd5e1; }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem 1rem;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+        }
+        @media (min-width: 768px) {
+            .container { grid-template-columns: 1fr 1fr; }
+        }
+        
+        .card {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+        }
+        .card h2 { margin-top: 0; font-size: 1.25rem; margin-bottom: 1rem; }
+        
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; font-weight: 500; margin-bottom: 0.25rem; font-size: 0.9rem; }
+        .form-group input, .form-group select {
+            width: 100%; padding: 0.5rem;
+            border: 1px solid var(--border); border-radius: 6px;
+            font-family: inherit;
+        }
+        .error-text { color: #ef4444; font-size: 0.8rem; display: none; margin-top: 0.25rem; }
+        
+        button {
+            background: var(--primary); color: white;
+            border: none; padding: 0.75rem 1.5rem;
+            border-radius: 8px; font-weight: 600; cursor: pointer;
+            width: 100%; font-size: 1rem; transition: background 0.2s;
+        }
+        button:hover { background: var(--primary-hover); }
+        
+        .risk-gauge {
+            text-align: center; margin-bottom: 1.5rem;
+            padding: 2rem; border-radius: 12px;
+            background: #f1f5f9;
+        }
+        .risk-score { font-size: 3rem; font-weight: 700; line-height: 1; margin-bottom: 0.5rem; }
+        .risk-band { font-size: 1.25rem; font-weight: 600; }
+        
+        .risk-low { color: #16a34a; }
+        .risk-mod { color: #d97706; }
+        .risk-high { color: #ea580c; }
+        .risk-vhigh { color: #dc2626; }
+        
+        .chart-container { position: relative; height: 300px; width: 100%; }
+        
+        .tips-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
+        .tip-card { background: #f8fafc; padding: 1rem; border-radius: 8px; border: 1px solid var(--border); }
+        .tip-card h4 { margin: 0 0 0.5rem 0; color: var(--primary); }
+        .tip-card p { margin: 0; font-size: 0.9rem; }
+        
+        .hidden { display: none; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: 0.9rem; }
+        th, td { padding: 0.5rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { font-weight: 600; color: var(--text-muted); }
+        
+        .footer { text-align: center; padding: 2rem; color: var(--text-muted); font-size: 0.8rem; border-top: 1px solid var(--border); margin-top: 2rem; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>🩺 Cancer Risk Analyser</h1>
+    <p>Predictive modelling with Exact Shapley value explanations</p>
+    <div style="margin-top: 1rem;">
+        <select id="modelSelect" style="padding: 0.5rem; border-radius: 6px; font-family: inherit;">
+            <option value="Ensemble">Ensemble (Recommended) - Test AUC: 0.963</option>
+            <option value="Encoded MLP">Encoded MLP (Deep Learning) - Test AUC: 0.958</option>
+            <option value="Gradient Boosting">Gradient Boosting - Test AUC: 0.955</option>
+        </select>
+    </div>
+</div>
+
+<div class="container">
+    <!-- Left Column: Input -->
+    <div class="card">
+        <h2>Patient Profile</h2>
+        <form id="predictForm">
+            {% for col, limits in ranges.items() %}
+            <div class="form-group">
+                <label for="{{ col }}">{{ col }}</label>
+                {% if limits.unique|length <= 3 %}
+                <select id="{{ col }}" name="{{ col }}">
+                    {% for val in limits.unique %}
+                    <option value="{{ val }}" {% if val == limits.mean|round %}selected{% endif %}>{{ val }}</option>
+                    {% endfor %}
+                </select>
+                {% else %}
+                <input type="number" step="any" id="{{ col }}" name="{{ col }}" value="{{ limits.mean|round(1) }}" min="{{ limits.min }}" max="{{ limits.max }}">
+                {% endif %}
+                <div class="error-text" id="err-{{ col }}">Outside training range [{{ limits.min }}, {{ limits.max }}]</div>
+            </div>
+            {% endfor %}
+            <button type="submit" id="submitBtn">Calculate Risk</button>
+            <div id="globalError" class="error-text" style="text-align:center; font-size:1rem; margin-top:1rem;"></div>
+        </form>
+    </div>
+
+    <!-- Right Column: Output -->
+    <div class="card hidden" id="resultCard">
+        <div class="risk-gauge" id="riskGauge">
+            <div class="risk-score" id="riskScore">--%</div>
+            <div class="risk-band" id="riskBand">--</div>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.5rem;">This score is a model estimate of patterns in data, not a medical diagnosis.</p>
+        </div>
+        
+        <h3>Why this score?</h3>
+        <p style="font-size: 0.9rem;">The waterfall chart shows how each factor contributes to your final score, starting from the baseline average.</p>
+        <div class="chart-container">
+            <canvas id="waterfallChart"></canvas>
+        </div>
+        <p id="topDriversText" style="font-size: 0.9rem; margin-top: 1rem; font-weight: 500;"></p>
+        <p style="font-size: 0.8rem; color: var(--text-muted);">The model identifies statistical factors, not proof of cause and effect.</p>
+        
+        <h3 style="margin-top: 2rem;">What you can change</h3>
+        <div class="tips-grid" id="whatIfGrid"></div>
+        <div style="margin-top: 1rem; font-size: 0.85rem; color: var(--text-muted);">
+            <strong>Not changeable:</strong> Age, Gender, GeneticRisk, CancerHistory.
+        </div>
+    </div>
+</div>
+
+<div class="container" style="grid-template-columns: 1fr; padding-top: 0;">
+    <div class="card">
+        <h2>Model Performance</h2>
+        <p style="font-size: 0.9rem;">The data used to train this model is probably synthetic. Performance metrics represent dataset averages.</p>
+        <div id="metricsTables" style="display: flex; flex-wrap: wrap; gap: 2rem;">
+            <div style="flex: 1; min-width: 300px;">
+                <h4>Test Set Results</h4>
+                <table id="testTable"></table>
+            </div>
+            <div style="flex: 1; min-width: 300px;">
+                <h4>5-Fold CV Results</h4>
+                <table id="cvTable"></table>
+            </div>
+        </div>
+        <div style="text-align: center; margin-top: 2rem;">
+            <h4>Calibration Curve</h4>
+            <img src="/static/calibration.png" alt="Calibration Curve" style="max-width: 100%; border-radius: 8px;">
+        </div>
+    </div>
+</div>
+
+<div class="footer">
+    <p><strong>Disclaimer:</strong> Trained on a probably synthetic Kaggle dataset. Not clinically validated. Not medical advice.</p>
+</div>
+
+<!-- Serve images statically -->
+<script>
+    // Copy calibration.png to static
+</script>
+<script src="/static/vendor/chart.js"></script>
+<script src="/static/js/main.js"></script>
+</body>
+</html>
