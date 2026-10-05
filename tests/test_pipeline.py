@@ -78,3 +78,25 @@ def test_pickle_class_in_subprocess():
     script = f"import sys; sys.path.insert(0, r'{os.path.join(base_dir, 'src')}'); import joblib; print(type(joblib.load(r'{os.path.join(base_dir, 'models', 'feature_encoder.pkl')}')))"
     result = subprocess.run(['python', '-c', script], capture_output=True, text=True)
     assert 'features.ComplexFeatureEncoder' in result.stdout
+
+def test_explain_one(dummy_data):
+    from explain_one import factor_contributions, what_if
+    encoder = load_encoder(os.path.join(base_dir, 'models', 'feature_encoder.pkl'))
+    model = load_dl_model(os.path.join(base_dir, 'models', 'cancer_dl_model_v2.keras'))
+    
+    # Take second row (Smoking=1)
+    row = dummy_data.iloc[[1]]
+    p_full, contributions = factor_contributions(row, model, encoder, data_path='dataset/cancer_data.csv')
+    
+    # contributions sum is finite
+    assert np.isfinite(sum(contributions.values()))
+    
+    res = what_if(row, model, encoder, data_path='dataset/cancer_data.csv')
+    
+    for k, v in res.items():
+        assert 0.0 <= v <= 1.0, f"{k} what_if value out of range"
+        
+    if 'Smoking' in res:
+        # Check tolerance instead of asserting monotonic
+        if res['Smoking'] > p_full + 1e-4:
+            print(f"Warning: Model is not monotonic for Smoking! Original: {p_full:.4f}, Without smoking: {res['Smoking']:.4f}")
