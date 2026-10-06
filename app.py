@@ -173,9 +173,12 @@ with tab1:
             'CancerHistory': cancer_history
         }])
         
+        def format_prob(p):
+            return f"{p * 100:.1f}%"
+            
         # 1. Explanation Logic
         # Update app to use probability diffs for the chart
-        p_full, contributions_prob, p_base = factor_contributions(input_data, model, encoder)
+        p_full, contrib_lo, contributions_prob, p_base = factor_contributions(input_data, model, encoder)
         what_if_res = what_if(input_data, model, encoder)
         
         st.markdown("---")

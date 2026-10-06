@@ -91,7 +91,7 @@ def factor_contributions(raw_row_df, model, encoder, baseline=None, data_path='d
         logit_replaced = get_true_logit(replaced_row, model, encoder)
         contributions_lo[col] = logit_full - logit_replaced
         
-    return p_full, contributions_prob, p_base
+    return p_full, contributions_lo, contributions_prob, p_base
 
 def what_if(raw_row_df, model, encoder, quartiles=None, data_path='dataset/cancer_data.csv'):
     if quartiles is None:

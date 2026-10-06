@@ -90,7 +90,7 @@ def test_explain_one(dummy_data):
         'PhysicalActivity': 1, 'AlcoholIntake': 4, 'CancerHistory': 1
     }])
     
-    p_full, contrib_lo, contrib_prob = factor_contributions(row, model, encoder, data_path='dataset/cancer_data.csv')
+    p_full, contrib_lo, contrib_prob, p_base = factor_contributions(row, model, encoder, data_path='dataset/cancer_data.csv')
     
     # contributions sum is finite
     assert np.isfinite(sum(contrib_lo.values()))
