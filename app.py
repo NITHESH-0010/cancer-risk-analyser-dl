@@ -33,6 +33,15 @@ st.markdown("""
         margin-bottom: 20px;
     }
     
+    .block-container {
+        padding-bottom: 90px !important;
+    }
+
+    [data-testid="stWidgetLabel"] p, [data-testid="stWidgetLabel"] label {
+        color: #E6EEF8 !important;
+        font-weight: 500;
+    }
+    
     h1, h2, h3, h4, h5, h6, .stMarkdown p {
         color: #ccd6f6;
     }
@@ -58,6 +67,15 @@ st.markdown("""
         margin-bottom: 20px;
         box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
     }
+    .risk-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-weight: 600;
+        font-size: 1.2rem;
+        background-color: rgba(255, 255, 255, 0.2);
+        margin-bottom: 10px;
+    }
     .risk-low { background: linear-gradient(135deg, #a8e063 0%, #56ab2f 100%); }
     .risk-mod { background: linear-gradient(135deg, #ffd194 0%, #70e1f5 100%); /* Adjusted to more amber */ }
     .risk-mod { background: linear-gradient(135deg, #f6d365 0%, #fda085 100%); }
@@ -82,6 +100,9 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+
+import plotly.graph_objects as go
+import plotly.express as px
 
 @st.cache_resource
 def get_model_and_encoder():
@@ -153,19 +174,11 @@ with tab1:
         }])
         
         # 1. Explanation Logic
-        p_full, contributions_lo, contributions_prob = factor_contributions(input_data, model, encoder)
+        # Update app to use probability diffs for the chart
+        p_full, contributions_prob, p_base = factor_contributions(input_data, model, encoder)
         what_if_res = what_if(input_data, model, encoder)
         
         st.markdown("---")
-        
-        # Formatting function for probability
-        def format_prob(p):
-            if p < 0.01:
-                return "<1%"
-            elif p > 0.99:
-                return ">99%"
-            else:
-                return f"{p * 100:.1f}%"
         
         # 2. Result Section
         if p_full < 0.33:
@@ -180,48 +193,72 @@ with tab1:
             
         st.markdown(f"""
         <div class="risk-card {risk_class}">
-            <h2>Predicted Risk Band: {risk_text}</h2>
-            <div class="risk-score">{format_prob(p_full)}</div>
+            <div class="risk-badge">Risk Band: {risk_text}</div>
+            <div class="risk-score">Predicted risk: {p_full * 100:.1f}%</div>
         </div>
         """, unsafe_allow_html=True)
         st.progress(float(p_full))
         
-        st.markdown(f"**Predicted Class (0.5 threshold):** {1 if p_full >= 0.5 else 0}")
-        st.caption("Note: This score is a model output reflecting patterns in the data, not a calibrated real-world probability (training used class weights to balance outcomes).")
+        st.caption(f"Note: This score is a model output reflecting patterns in the data, not a calibrated real-world probability. (Baseline risk: {p_base * 100:.1f}%)")
         
         st.markdown("---")
         st.markdown("### Factors behind this score")
-        st.caption("Bigger bar = bigger push; scores are shown on a scale that does not saturate at 0% or 100%.")
+        st.caption("How each factor shifts the predicted risk relative to the average baseline profile.")
         
-        # Plot contributions
-        c_series = pd.Series(contributions_lo).sort_values()
+        # Plot contributions using Plotly
+        # Sort by absolute impact
+        items = list(contributions_prob.items())
+        items.sort(key=lambda x: abs(x[1]), reverse=False) # Ascending absolute value for horizontal bar chart
         
-        fig, ax = plt.subplots(figsize=(8, 5))
-        fig.patch.set_alpha(0.0) # Transparent bg
-        ax.set_facecolor("none")
+        features = [x[0] for x in items]
+        values = [x[1] * 100 for x in items]
+        colors = ['#ff416c' if v > 0 else '#56ab2f' for v in values]
+        texts = [f"+{v:.1f} pts" if v > 0 else f"{v:.1f} pts" for v in values]
         
-        colors = ['#ff416c' if x > 0 else '#56ab2f' for x in c_series.values]
-        c_series.plot(kind='barh', color=colors, ax=ax)
-        ax.set_xlabel('Effect on risk score (log-odds)')
-        ax.tick_params(axis='both', colors='#ccd6f6')
-        ax.xaxis.label.set_color('#ccd6f6')
+        fig = go.Figure(go.Bar(
+            x=values,
+            y=features,
+            orientation='h',
+            marker_color=colors,
+            text=texts,
+            textposition='auto',
+        ))
         
-        for spine in ax.spines.values():
-            spine.set_edgecolor('#ccd6f6')
+        fig.update_layout(
+            margin=dict(l=20, r=20, t=30, b=20),
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='#ccd6f6'),
+            xaxis_title="Percentage Points Impact on Risk",
+            height=400,
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # 2-3 sentences naming the top drivers and prevention tips
+        # Sort by actual risk-raising impact
+        sorted_raisers = sorted([i for i in items if i[1] > 0.01], key=lambda x: x[1], reverse=True)
+        
+        if len(sorted_raisers) > 0:
+            st.markdown("#### Top Risk-Raising Factors")
             
-        st.pyplot(fig)
-        
-        # 2-3 sentences naming the top drivers
-        sorted_factors = c_series.sort_values(ascending=False)
-        top_raisers = sorted_factors[sorted_factors > 0]
-        
-        if len(top_raisers) > 0:
-            top_factor = top_raisers.index[0]
-            sentence1 = f"**{top_factor}** is the biggest factor raising this score."
+            tips = {
+                'Smoking': ("Smoking damages DNA and limits the body's ability to heal.", "Quitting smoking is the single best action to lower risk."),
+                'CancerHistory': ("Previous cancer treatments or genetics increase future risk.", "Keep up with regular screenings and medical check-ups."),
+                'GeneticRisk': ("Certain gene variants predispose cells to mutations.", "Discuss more frequent screenings with your doctor."),
+                'Gender': ("The dataset patterns show a correlation (likely synthetic).", "Maintain overall health (this is likely a dataset artifact)."),
+                'Age': ("Cellular damage accumulates over time.", "Focus on healthy aging with diet and exercise."),
+                'BMI': ("Higher BMI is linked to inflammation.", "Aim for a balanced diet and active lifestyle."),
+                'AlcoholIntake': ("Alcohol breaks down into harmful chemicals.", "Limit alcohol intake to moderate levels or avoid entirely."),
+                'PhysicalActivity': ("Low activity can affect hormones and immune function.", "Incorporate at least 150 minutes of moderate activity weekly.")
+            }
+            
+            for i in range(min(3, len(sorted_raisers))):
+                factor = sorted_raisers[i][0]
+                cause, tip = tips.get(factor, ("Contributes to risk patterns.", "Maintain healthy lifestyle habits."))
+                st.markdown(f"**{factor}:** {cause} **Tip:** {tip}")
         else:
-            sentence1 = "No factors are significantly raising the score above baseline."
-            
-        st.markdown(f"{sentence1} The model finds patterns in the data and does not prove cause and effect.")
+            st.markdown("No significant risk-raising factors detected compared to the baseline.")
         
         st.markdown("---")
         st.markdown("### Things you can change")

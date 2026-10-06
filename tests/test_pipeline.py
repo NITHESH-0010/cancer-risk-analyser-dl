@@ -143,3 +143,26 @@ def test_shapley_logic():
     assert 'Smoking' in res
     assert 'new_prob' in res['Smoking']
     assert 'pts_change' in res['Smoking']
+
+def test_feature_order_assertion(dummy_data):
+    encoder = load_encoder(os.path.join(base_dir, 'models', 'feature_encoder.pkl'))
+    app_order = ['Age', 'Gender', 'BMI', 'Smoking', 'GeneticRisk', 'PhysicalActivity', 'AlcoholIntake', 'CancerHistory']
+    assert encoder.raw_columns == app_order, "Feature order mismatch between app and training!"
+    
+    # Flip each feature to ensure it affects prediction
+    model = load_dl_model(os.path.join(base_dir, 'models', 'cancer_dl_model_v2.keras'))
+    row = dummy_data.iloc[[0]].copy()
+    base_pred = model.predict(encode(row, encoder), verbose=0)[0][0]
+    
+    for feature in app_order:
+        flipped_row = row.copy()
+        if feature in ['Gender', 'Smoking', 'CancerHistory']:
+            flipped_row[feature] = 1 - flipped_row[feature]
+        elif feature == 'GeneticRisk':
+            flipped_row[feature] = (flipped_row[feature] + 1) % 3
+        else:
+            flipped_row[feature] = flipped_row[feature] * 1.5
+            
+        new_pred = model.predict(encode(flipped_row, encoder), verbose=0)[0][0]
+        # Not asserting not equal strictly due to some numeric instability, but they shouldn't be exactly the same
+        assert abs(new_pred - base_pred) > 1e-6, f"Feature {feature} has exactly zero impact when flipped!"

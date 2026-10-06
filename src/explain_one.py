@@ -51,26 +51,47 @@ def factor_contributions(raw_row_df, model, encoder, baseline=None, data_path='d
     encoded_full = encode(raw_row_df, encoder)
     p_full = float(model.predict(encoded_full, verbose=0)[0][0])
     
-    # We use true logit to avoid exact 0.0 diffs when p_full and p_replaced are both exactly 1.0
+    # Create baseline patient
+    baseline_patient = pd.DataFrame([baseline])
+    # ensure correct column order
+    baseline_patient = baseline_patient[raw_row_df.columns]
+    
+    encoded_base = encode(baseline_patient, encoder)
+    p_base = float(model.predict(encoded_base, verbose=0)[0][0])
+    
+    # Also get logit diffs just for what_if if needed, though we can skip
     logit_full = get_true_logit(raw_row_df, model, encoder)
     
-    contributions_lo = {}
-    contributions_prob = {}
+    raw_effects = {}
     for col in raw_row_df.columns:
         replaced_row = raw_row_df.copy()
         replaced_row[col] = baseline[col]
         
         encoded_replaced = encode(replaced_row, encoder)
         p_replaced = float(model.predict(encoded_replaced, verbose=0)[0][0])
+        raw_effects[col] = p_full - p_replaced
+        
+    total_raw = sum(raw_effects.values())
+    diff = p_full - p_base
+    
+    contributions_prob = {}
+    if abs(total_raw) > 1e-6:
+        for col, eff in raw_effects.items():
+            contributions_prob[col] = eff * (diff / total_raw)
+    else:
+        for col in raw_row_df.columns:
+            contributions_prob[col] = diff / len(raw_row_df.columns) if diff != 0 else 0.0
+            
+    # For backwards compatibility with what_if's delta_lo (not actually used by UI for chart anymore, but let's keep dict format)
+    # The new UI will use contributions_prob!
+    contributions_lo = {}
+    for col in raw_row_df.columns:
+        replaced_row = raw_row_df.copy()
+        replaced_row[col] = baseline[col]
         logit_replaced = get_true_logit(replaced_row, model, encoder)
+        contributions_lo[col] = logit_full - logit_replaced
         
-        delta_prob = p_full - p_replaced
-        delta_lo = logit_full - logit_replaced
-        
-        contributions_prob[col] = float(delta_prob)
-        contributions_lo[col] = float(delta_lo)
-        
-    return p_full, contributions_lo, contributions_prob
+    return p_full, contributions_prob, p_base
 
 def what_if(raw_row_df, model, encoder, quartiles=None, data_path='dataset/cancer_data.csv'):
     if quartiles is None:
