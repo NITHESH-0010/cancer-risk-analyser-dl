@@ -17,7 +17,7 @@ def get_baselines_and_quartiles(df=None, data_path='dataset/cancer_data.csv'):
     quartiles = {}
     
     for col in df.columns:
-        if col == 'Diagnosis' or col == 'Gender':
+        if col == 'Diagnosis':
             continue
         if df[col].nunique() <= 3:
             baseline[col] = df[col].mode()[0]

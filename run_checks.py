@@ -16,12 +16,12 @@ encoder = load_encoder('models/feature_encoder.pkl')
 model = load_dl_model('models/cancer_dl_model_v2.keras')
 
 data_A = pd.DataFrame([{
-    'Age': 25, 'Gender': 0, 'BMI': 22, 'Smoking': 0, 'GeneticRisk': 0, 
+    'Age': 25, 'BMI': 22, 'Smoking': 0, 'GeneticRisk': 0, 
     'PhysicalActivity': 8, 'AlcoholIntake': 0.5, 'CancerHistory': 0
 }])
 
 data_B = pd.DataFrame([{
-    'Age': 65, 'Gender': 1, 'BMI': 35, 'Smoking': 1, 'GeneticRisk': 2, 
+    'Age': 65, 'BMI': 35, 'Smoking': 1, 'GeneticRisk': 2, 
     'PhysicalActivity': 1, 'AlcoholIntake': 4, 'CancerHistory': 1
 }])
 

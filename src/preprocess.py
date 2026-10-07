@@ -25,7 +25,7 @@ def preprocess_and_split():
     )
     
     # Separate numeric and categorical/binary columns for scaling
-    # Typically, we don't scale binary columns like CancerHistory and Gender
+    # Typically, we don't scale binary columns like CancerHistory
     # Let's identify numeric columns that have >2 unique values
     numeric_cols = [col for col in X_train.columns if X_train[col].nunique() > 2]
     binary_cols = [col for col in X_train.columns if X_train[col].nunique() <= 2]

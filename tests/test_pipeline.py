@@ -147,6 +147,8 @@ def test_shapley_logic():
 def test_feature_order_assertion(dummy_data):
     encoder = load_encoder(os.path.join(base_dir, 'models', 'feature_encoder.pkl'))
     app_order = ['Age', 'BMI', 'Smoking', 'GeneticRisk', 'PhysicalActivity', 'AlcoholIntake', 'CancerHistory']
+    assert 'Gender' not in app_order, "Gender must be completely removed"
+    assert 'Gender' not in encoder.raw_columns, "Gender must be absent from encoder"
     assert encoder.raw_columns == app_order, "Feature order mismatch between app and training!"
     
     # Flip each feature to ensure it affects prediction
