@@ -17,7 +17,7 @@ def get_baselines_and_quartiles(df=None, data_path='dataset/cancer_data.csv'):
     quartiles = {}
     
     for col in df.columns:
-        if col == 'Diagnosis':
+        if col == 'Diagnosis' or col == 'Gender':
             continue
         if df[col].nunique() <= 3:
             baseline[col] = df[col].mode()[0]
@@ -32,6 +32,11 @@ def get_baselines_and_quartiles(df=None, data_path='dataset/cancer_data.csv'):
         }
     return baseline, quartiles
 
+import joblib
+import sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from model_io import load_calibrator
+
 def get_logit(p):
     p_clipped = np.clip(p, 1e-6, 1 - 1e-6)
     return float(np.log(p_clipped / (1 - p_clipped)))
@@ -45,11 +50,22 @@ def get_true_logit(df, model, encoder):
     return float(np.dot(out, W)[0][0] + b[0])
 
 def factor_contributions(raw_row_df, model, encoder, baseline=None, data_path='dataset/cancer_data.csv'):
+    calibrator = None
+    try:
+        calibrator = load_calibrator('models/calibrator.pkl')
+    except:
+        pass
+        
+    def pred_cal(encoded):
+        p = float(model.predict(encoded, verbose=0)[0][0])
+        if calibrator:
+            p = float(calibrator.predict([p])[0])
+        return min(p, 0.999)
     if baseline is None:
         baseline, _ = get_baselines_and_quartiles(data_path=data_path)
         
     encoded_full = encode(raw_row_df, encoder)
-    p_full = float(model.predict(encoded_full, verbose=0)[0][0])
+    p_full = pred_cal(encoded_full)
     
     # Create baseline patient
     baseline_patient = pd.DataFrame([baseline])
@@ -57,7 +73,7 @@ def factor_contributions(raw_row_df, model, encoder, baseline=None, data_path='d
     baseline_patient = baseline_patient[raw_row_df.columns]
     
     encoded_base = encode(baseline_patient, encoder)
-    p_base = float(model.predict(encoded_base, verbose=0)[0][0])
+    p_base = pred_cal(encoded_base)
     
     # Also get logit diffs just for what_if if needed, though we can skip
     logit_full = get_true_logit(raw_row_df, model, encoder)
@@ -68,7 +84,7 @@ def factor_contributions(raw_row_df, model, encoder, baseline=None, data_path='d
         replaced_row[col] = baseline[col]
         
         encoded_replaced = encode(replaced_row, encoder)
-        p_replaced = float(model.predict(encoded_replaced, verbose=0)[0][0])
+        p_replaced = pred_cal(encoded_replaced)
         raw_effects[col] = p_full - p_replaced
         
     total_raw = sum(raw_effects.values())
@@ -94,16 +110,27 @@ def factor_contributions(raw_row_df, model, encoder, baseline=None, data_path='d
     return p_full, contributions_lo, contributions_prob, p_base
 
 def what_if(raw_row_df, model, encoder, quartiles=None, data_path='dataset/cancer_data.csv'):
+    calibrator = None
+    try:
+        calibrator = load_calibrator('models/calibrator.pkl')
+    except:
+        pass
+        
+    def pred_cal(encoded):
+        p = float(model.predict(encoded, verbose=0)[0][0])
+        if calibrator:
+            p = float(calibrator.predict([p])[0])
+        return min(p, 0.999)
     if quartiles is None:
         _, quartiles = get_baselines_and_quartiles(data_path=data_path)
         
-    p_full = float(model.predict(encode(raw_row_df, encoder), verbose=0)[0][0])
+    p_full = pred_cal(encode(raw_row_df, encoder))
     logit_full = get_true_logit(raw_row_df, model, encoder)
     
     results = {}
     
     def evaluate_what_if(key, row):
-        p_new = float(model.predict(encode(row, encoder), verbose=0)[0][0])
+        p_new = pred_cal(encode(row, encoder))
         logit_new = get_true_logit(row, model, encoder)
         results[key] = {'p_new': p_new, 'delta_lo': float(logit_full - logit_new)}
         

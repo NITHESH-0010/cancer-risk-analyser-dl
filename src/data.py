@@ -6,6 +6,10 @@ def load_and_verify_data(filepath="dataset/cancer_data.csv"):
     print(f"Loading data from {filepath}...")
     df = pd.read_csv(filepath)
     
+    if 'Gender' in df.columns:
+        print("Dropping 'Gender' column as it is a non-causal artifact.")
+        df = df.drop(columns=['Gender'])
+        
     # Check missing values and duplicates
     missing_counts = df.isnull().sum()
     duplicate_count = df.duplicated().sum()

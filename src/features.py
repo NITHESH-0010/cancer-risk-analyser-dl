@@ -63,10 +63,10 @@ class ComplexFeatureEncoder(BaseEstimator, TransformerMixin):
         # Define column roles
         self.onehot_col = 'GeneticRisk'
         self.piecewise_cols = ['Age', 'BMI', 'PhysicalActivity', 'AlcoholIntake']
-        self.passthrough_cols = ['Gender', 'Smoking', 'CancerHistory']
+        self.passthrough_cols = ['Smoking', 'CancerHistory']
         
         # The true order of features in the raw dataset
-        self.raw_columns = ['Age', 'Gender', 'BMI', 'Smoking', 'GeneticRisk', 'PhysicalActivity', 'AlcoholIntake', 'CancerHistory']
+        self.raw_columns = ['Age', 'BMI', 'Smoking', 'GeneticRisk', 'PhysicalActivity', 'AlcoholIntake', 'CancerHistory']
         
     def _to_dataframe(self, X):
         if isinstance(X, pd.DataFrame):

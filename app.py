@@ -147,11 +147,11 @@ tab1, tab2 = st.tabs(["Predict", "Model details"])
 with tab1:
     
     st.markdown("### Patient Data Input")
+    st.info("Note: 'Gender' was excluded from this model because it was identified as a non-causal dataset artifact.")
     col1, col2 = st.columns(2)
     
     with col1:
         age = st.slider("Age", min_value=int(ranges['Age']['min']), max_value=int(ranges['Age']['max']), value=int(ranges['Age']['mean']))
-        gender = st.selectbox("Gender (0=Female, 1=Male)", options=sorted([int(x) for x in ranges['Gender']['unique']]))
         bmi = st.slider("BMI", min_value=float(ranges['BMI']['min']), max_value=float(ranges['BMI']['max']), value=float(ranges['BMI']['mean']))
         smoking = st.selectbox("Smoking (0=No, 1=Yes)", options=sorted([int(x) for x in ranges['Smoking']['unique']]))
         
@@ -164,7 +164,6 @@ with tab1:
     if st.button("Predict Risk"):
         input_data = pd.DataFrame([{
             'Age': age,
-            'Gender': gender,
             'BMI': bmi,
             'Smoking': smoking,
             'GeneticRisk': genetic_risk,
@@ -249,7 +248,6 @@ with tab1:
                 'Smoking': ("Smoking damages DNA and limits the body's ability to heal.", "Quitting smoking is the single best action to lower risk."),
                 'CancerHistory': ("Previous cancer treatments or genetics increase future risk.", "Keep up with regular screenings and medical check-ups."),
                 'GeneticRisk': ("Certain gene variants predispose cells to mutations.", "Discuss more frequent screenings with your doctor."),
-                'Gender': ("The dataset patterns show a correlation (likely synthetic).", "Maintain overall health (this is likely a dataset artifact)."),
                 'Age': ("Cellular damage accumulates over time.", "Focus on healthy aging with diet and exercise."),
                 'BMI': ("Higher BMI is linked to inflammation.", "Aim for a balanced diet and active lifestyle."),
                 'AlcoholIntake': ("Alcohol breaks down into harmful chemicals.", "Limit alcohol intake to moderate levels or avoid entirely."),
@@ -293,7 +291,7 @@ with tab1:
             st.markdown(f"**Combined Impact:** Adopting all applicable lifestyle changes above could shift the score to **{format_prob(new_p_c)}**.")
             
         st.markdown("**Not changeable:**")
-        st.markdown("Age, Gender, Genetic Risk, and Cancer History are fixed factors.")
+        st.markdown("Age, Genetic Risk, and Cancer History are fixed factors.")
         
 with tab2:
     st.header("Model Details")

@@ -12,17 +12,17 @@ from predict import predict_proba
 def get_background_data(seed=42):
     train_raw = np.load(os.path.join(base_dir, 'data_splits', 'train_raw.npz'))
     X_train = train_raw['X']
-    cols = ['Age', 'Gender', 'BMI', 'Smoking', 'GeneticRisk', 'PhysicalActivity', 'AlcoholIntake', 'CancerHistory']
+    cols = ['Age', 'BMI', 'Smoking', 'GeneticRisk', 'PhysicalActivity', 'AlcoholIntake', 'CancerHistory']
     df = pd.DataFrame(X_train, columns=cols)
     return df.sample(n=50, random_state=seed)
 
-def compute_exact_shapley(raw_row, model_name='Ensemble', background_df=None):
+def compute_exact_shapley(raw_row, model_name='Encoded MLP', background_df=None):
     if background_df is None:
         background_df = get_background_data()
         
     features = list(raw_row.columns)
     N = len(features)
-    assert N == 8, "Expected exactly 8 features"
+    assert N == 7, "Expected exactly 8 features"
     
     # Precompute subset weights
     import math
@@ -96,7 +96,7 @@ def compute_exact_shapley(raw_row, model_name='Ensemble', background_df=None):
     
     return base_value_pts, contributions_pts, final_prob_pts
 
-def what_if(raw_row, model_name='Ensemble'):
+def what_if(raw_row, model_name='Encoded MLP'):
     # For modifiable features only
     features = ['Smoking', 'AlcoholIntake', 'PhysicalActivity', 'BMI']
     

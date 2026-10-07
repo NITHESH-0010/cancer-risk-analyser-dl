@@ -30,7 +30,7 @@ def explain_mlp():
     val_raw = np.load('data_splits/val_raw.npz')
     X_val_raw, y_val = val_raw['X'], val_raw['y']
     
-    feature_names = ['Age', 'Gender', 'BMI', 'Smoking', 'GeneticRisk', 'PhysicalActivity', 'AlcoholIntake', 'CancerHistory']
+    feature_names = ['Age', 'BMI', 'Smoking', 'GeneticRisk', 'PhysicalActivity', 'AlcoholIntake', 'CancerHistory']
     # The columns passed to encoder transform must match these feature names in order, but it was passed as dataframe in data.py
     # So we should convert X_val_raw to DataFrame
     X_val_df = pd.DataFrame(X_val_raw, columns=feature_names)

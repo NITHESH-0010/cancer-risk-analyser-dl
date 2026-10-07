@@ -15,7 +15,7 @@ from model_io import load_encoder, load_dl_model
 def dummy_data():
     return pd.DataFrame([{
         'Age': 50,
-        'Gender': 1,
+        
         'BMI': 25.0,
         'Smoking': 0,
         'GeneticRisk': 1,
@@ -24,7 +24,7 @@ def dummy_data():
         'CancerHistory': 0
     }, {
         'Age': 60,
-        'Gender': 0,
+        
         'BMI': 30.0,
         'Smoking': 1,
         'GeneticRisk': 2,
@@ -36,7 +36,7 @@ def dummy_data():
 def test_encode_output_shape(dummy_data):
     encoder = load_encoder(os.path.join(base_dir, 'models', 'feature_encoder.pkl'))
     encoded = encode(dummy_data, encoder)
-    assert encoded.shape == (2, 38)
+    assert encoded.shape == (2, 37)
     
 def test_no_zero_variance_column_on_train():
     encoder = load_encoder(os.path.join(base_dir, 'models', 'feature_encoder.pkl'))
@@ -86,7 +86,7 @@ def test_explain_one(dummy_data):
     
     # Exact profile B from instructions
     row = pd.DataFrame([{
-        'Age': 65, 'Gender': 1, 'BMI': 35, 'Smoking': 1, 'GeneticRisk': 2, 
+        'Age': 65,  'BMI': 35, 'Smoking': 1, 'GeneticRisk': 2, 
         'PhysicalActivity': 1, 'AlcoholIntake': 4, 'CancerHistory': 1
     }])
     
@@ -118,7 +118,7 @@ def test_shapley_logic():
     # 20 random test rows for additivity
     test_raw = np.load(os.path.join(base_dir, 'data_splits', 'test_raw.npz'))
     X_test = test_raw['X']
-    cols = ['Age', 'Gender', 'BMI', 'Smoking', 'GeneticRisk', 'PhysicalActivity', 'AlcoholIntake', 'CancerHistory']
+    cols = ['Age', 'BMI', 'Smoking', 'GeneticRisk', 'PhysicalActivity', 'AlcoholIntake', 'CancerHistory']
     df_test = pd.DataFrame(X_test, columns=cols)
     
     sample_df = df_test.sample(20, random_state=42)
@@ -129,7 +129,7 @@ def test_shapley_logic():
         
     # High-risk profile B
     row_B = pd.DataFrame([{
-        'Age': 65, 'Gender': 1, 'BMI': 35, 'Smoking': 1, 'GeneticRisk': 2, 
+        'Age': 65,  'BMI': 35, 'Smoking': 1, 'GeneticRisk': 2, 
         'PhysicalActivity': 1, 'AlcoholIntake': 4, 'CancerHistory': 1
     }])
     
@@ -146,7 +146,7 @@ def test_shapley_logic():
 
 def test_feature_order_assertion(dummy_data):
     encoder = load_encoder(os.path.join(base_dir, 'models', 'feature_encoder.pkl'))
-    app_order = ['Age', 'Gender', 'BMI', 'Smoking', 'GeneticRisk', 'PhysicalActivity', 'AlcoholIntake', 'CancerHistory']
+    app_order = ['Age', 'BMI', 'Smoking', 'GeneticRisk', 'PhysicalActivity', 'AlcoholIntake', 'CancerHistory']
     assert encoder.raw_columns == app_order, "Feature order mismatch between app and training!"
     
     # Flip each feature to ensure it affects prediction
@@ -156,7 +156,7 @@ def test_feature_order_assertion(dummy_data):
     
     for feature in app_order:
         flipped_row = row.copy()
-        if feature in ['Gender', 'Smoking', 'CancerHistory']:
+        if feature in ['Smoking', 'CancerHistory']:
             flipped_row[feature] = 1 - flipped_row[feature]
         elif feature == 'GeneticRisk':
             flipped_row[feature] = (flipped_row[feature] + 1) % 3

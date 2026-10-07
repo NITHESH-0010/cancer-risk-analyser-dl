@@ -12,3 +12,6 @@ def load_encoder(path='models/feature_encoder.pkl'):
 
 def load_dl_model(path='models/cancer_dl_model_v2.keras'):
     return load_model(path)
+
+def load_calibrator(path='models/calibrator.pkl'):
+    return joblib.load(path)
