@@ -5,194 +5,155 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cancer Risk Analyser</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --primary: #2563eb;
-            --primary-hover: #1d4ed8;
-            --bg-body: #f8fafc;
-            --bg-card: #ffffff;
-            --text-main: #1e293b;
-            --text-muted: #64748b;
-            --border: #e2e8f0;
-            --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-        }
-        * { box-sizing: border-box; }
-        body {
-            font-family: 'Inter', system-ui, -apple-system, sans-serif;
-            margin: 0;
-            background: var(--bg-body);
-            color: var(--text-main);
-            line-height: 1.5;
-        }
-        .header {
-            background: linear-gradient(135deg, #1e293b, #0f172a);
-            color: white;
-            padding: 2rem 1rem;
-            text-align: center;
-        }
-        .header h1 { margin: 0 0 0.5rem 0; font-weight: 700; }
-        .header p { margin: 0; color: #cbd5e1; }
-        
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 2rem 1rem;
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 2rem;
-        }
-        @media (min-width: 768px) {
-            .container { grid-template-columns: 1fr 1fr; }
-        }
-        
-        .card {
-            background: var(--bg-card);
-            border-radius: 12px;
-            padding: 1.5rem;
-            box-shadow: var(--shadow);
-            border: 1px solid var(--border);
-        }
-        .card h2 { margin-top: 0; font-size: 1.25rem; margin-bottom: 1rem; }
-        
-        .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; font-weight: 500; margin-bottom: 0.25rem; font-size: 0.9rem; }
-        .form-group input, .form-group select {
-            width: 100%; padding: 0.5rem;
-            border: 1px solid var(--border); border-radius: 6px;
-            font-family: inherit;
-        }
-        .error-text { color: #ef4444; font-size: 0.8rem; display: none; margin-top: 0.25rem; }
-        
-        button {
-            background: var(--primary); color: white;
-            border: none; padding: 0.75rem 1.5rem;
-            border-radius: 8px; font-weight: 600; cursor: pointer;
-            width: 100%; font-size: 1rem; transition: background 0.2s;
-        }
-        button:hover { background: var(--primary-hover); }
-        
-        .risk-gauge {
-            text-align: center; margin-bottom: 1.5rem;
-            padding: 2rem; border-radius: 12px;
-            background: #f1f5f9;
-        }
-        .risk-score { font-size: 3rem; font-weight: 700; line-height: 1; margin-bottom: 0.5rem; }
-        .risk-band { font-size: 1.25rem; font-weight: 600; }
-        
-        .risk-low { color: #16a34a; }
-        .risk-mod { color: #d97706; }
-        .risk-high { color: #ea580c; }
-        .risk-vhigh { color: #dc2626; }
-        
-        .chart-container { position: relative; height: 300px; width: 100%; }
-        
-        .tips-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
-        .tip-card { background: #f8fafc; padding: 1rem; border-radius: 8px; border: 1px solid var(--border); }
-        .tip-card h4 { margin: 0 0 0.5rem 0; color: var(--primary); }
-        .tip-card p { margin: 0; font-size: 0.9rem; }
-        
-        .hidden { display: none; }
-        
-        table { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: 0.9rem; }
-        th, td { padding: 0.5rem; text-align: left; border-bottom: 1px solid var(--border); }
-        th { font-weight: 600; color: var(--text-muted); }
-        
-        .footer { text-align: center; padding: 2rem; color: var(--text-muted); font-size: 0.8rem; border-top: 1px solid var(--border); margin-top: 2rem; }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
 </head>
 <body>
-
-<div class="header">
-    <h1>🩺 Cancer Risk Analyser</h1>
-    <p>Predictive modelling with Exact Shapley value explanations</p>
-    <div style="margin-top: 1rem;">
-        <select id="modelSelect" style="padding: 0.5rem; border-radius: 6px; font-family: inherit;">
-            <option value="Ensemble">Ensemble (Recommended) - Test AUC: 0.963</option>
-            <option value="Encoded MLP">Encoded MLP (Deep Learning) - Test AUC: 0.958</option>
-            <option value="Gradient Boosting">Gradient Boosting - Test AUC: 0.955</option>
-        </select>
-    </div>
-</div>
-
-<div class="container">
-    <!-- Left Column: Input -->
-    <div class="card">
-        <h2>Patient Profile</h2>
-        <form id="predictForm">
-            {% for col, limits in ranges.items() %}
-            <div class="form-group">
-                <label for="{{ col }}">{{ col }}</label>
-                {% if limits.unique|length <= 3 %}
-                <select id="{{ col }}" name="{{ col }}">
-                    {% for val in limits.unique %}
-                    <option value="{{ val }}" {% if val == limits.mean|round %}selected{% endif %}>{{ val }}</option>
-                    {% endfor %}
-                </select>
-                {% else %}
-                <input type="number" step="any" id="{{ col }}" name="{{ col }}" value="{{ limits.mean|round(1) }}" min="{{ limits.min }}" max="{{ limits.max }}">
-                {% endif %}
-                <div class="error-text" id="err-{{ col }}">Outside training range [{{ limits.min }}, {{ limits.max }}]</div>
-            </div>
-            {% endfor %}
-            <button type="submit" id="submitBtn">Calculate Risk</button>
-            <div id="globalError" class="error-text" style="text-align:center; font-size:1rem; margin-top:1rem;"></div>
-        </form>
-    </div>
-
-    <!-- Right Column: Output -->
-    <div class="card hidden" id="resultCard">
-        <div class="risk-gauge" id="riskGauge">
-            <div class="risk-score" id="riskScore">--%</div>
-            <div class="risk-band" id="riskBand">--</div>
-            <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.5rem;">This score is a model estimate of patterns in data, not a medical diagnosis.</p>
-        </div>
-        
-        <h3>Why this score?</h3>
-        <p style="font-size: 0.9rem;">The waterfall chart shows how each factor contributes to your final score, starting from the baseline average.</p>
-        <div class="chart-container">
-            <canvas id="waterfallChart"></canvas>
-        </div>
-        <p id="topDriversText" style="font-size: 0.9rem; margin-top: 1rem; font-weight: 500;"></p>
-        <p style="font-size: 0.8rem; color: var(--text-muted);">The model identifies statistical factors, not proof of cause and effect.</p>
-        
-        <h3 style="margin-top: 2rem;">What you can change</h3>
-        <div class="tips-grid" id="whatIfGrid"></div>
-        <div style="margin-top: 1rem; font-size: 0.85rem; color: var(--text-muted);">
-            <strong>Not changeable:</strong> Age, GeneticRisk, CancerHistory.
-        </div>
-    </div>
-</div>
-
-<div class="container" style="grid-template-columns: 1fr; padding-top: 0;">
-    <div class="card">
-        <h2>Model Performance</h2>
-        <p style="font-size: 0.9rem;">The data used to train this model is probably synthetic. Performance metrics represent dataset averages.</p>
-        <div id="metricsTables" style="display: flex; flex-wrap: wrap; gap: 2rem;">
-            <div style="flex: 1; min-width: 300px;">
-                <h4>Test Set Results</h4>
-                <table id="testTable"></table>
-            </div>
-            <div style="flex: 1; min-width: 300px;">
-                <h4>5-Fold CV Results</h4>
-                <table id="cvTable"></table>
+    <nav class="navbar">
+        <div class="container nav-content">
+            <div class="brand">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                OncoRisk Analyzer
             </div>
         </div>
-        <div style="text-align: center; margin-top: 2rem;">
-            <h4>Calibration Curve</h4>
-            <img src="/static/calibration.png" alt="Calibration Curve" style="max-width: 100%; border-radius: 8px;">
+    </nav>
+
+    <header class="hero">
+        <div class="container">
+            <h1>Understand Your Health Profile</h1>
+            <p>Advanced deep learning to evaluate your personal risk factors and empower you with actionable insights.</p>
         </div>
-    </div>
-</div>
+    </header>
 
-<div class="footer">
-    <p><strong>Disclaimer:</strong> Trained on a probably synthetic Kaggle dataset. Not clinically validated. Not medical advice.</p>
-</div>
+    <main class="container">
+        <div class="card form-card">
+            <h2>Personal Assessment</h2>
+            <form id="assessmentForm">
+                <div class="form-grid">
+                    <div class="input-group">
+                        <label for="Age">Age (years)</label>
+                        <input type="number" id="Age" name="Age" min="0" max="120" value="45" required>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="Gender">Gender</label>
+                        <select id="Gender" name="Gender" required>
+                            <option value="Male">Male</option>
+                            <option value="Female">Female</option>
+                            <option value="Other">Other</option>
+                        </select>
+                        <small class="note">Collected for records only; not used in the risk calculation.</small>
+                    </div>
 
-<!-- Serve images statically -->
-<script>
-    // Copy calibration.png to static
-</script>
-<script src="/static/vendor/chart.js"></script>
-<script src="/static/js/main.js"></script>
+                    <div class="input-group">
+                        <label for="BMI">BMI</label>
+                        <input type="number" id="BMI" name="BMI" min="10" max="60" step="0.1" value="24.5" required>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="Smoking">Smoking Status</label>
+                        <select id="Smoking" name="Smoking" required>
+                            <option value="0">Non-Smoker</option>
+                            <option value="1">Former Smoker</option>
+                            <option value="2">Current Smoker</option>
+                        </select>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="GeneticRisk">Genetic Risk</label>
+                        <select id="GeneticRisk" name="GeneticRisk" required>
+                            <option value="0">Low</option>
+                            <option value="1">Medium</option>
+                            <option value="2">High</option>
+                        </select>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="PhysicalActivity">Physical Activity (hrs/wk)</label>
+                        <input type="number" id="PhysicalActivity" name="PhysicalActivity" min="0" max="168" step="0.1" value="3.5" required>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="AlcoholIntake">Alcohol Intake (units/wk)</label>
+                        <input type="number" id="AlcoholIntake" name="AlcoholIntake" min="0" step="0.1" value="2.0" required>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="CancerHistory">Family Cancer History</label>
+                        <select id="CancerHistory" name="CancerHistory" required>
+                            <option value="0">No</option>
+                            <option value="1">Yes</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" id="submitBtn">
+                        <span class="btn-text">Calculate Risk</span>
+                        <span class="btn-loader" style="display: none;"></span>
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <div id="resultsSection" class="results-section hidden">
+            <div class="results-header">
+                <h2>Analysis Results</h2>
+                <div class="metrics-chips">
+                    <span class="chip" id="accuracyChip">Model Accuracy: --%</span>
+                    <span class="chip" id="aucChip">AUC: --</span>
+                </div>
+            </div>
+
+            <div class="results-grid">
+                <div class="card gauge-card">
+                    <h3>Risk Probability</h3>
+                    <div class="gauge-container">
+                        <svg viewBox="0 0 100 50" class="gauge">
+                            <path class="gauge-bg" d="M 10 50 A 40 40 0 0 1 90 50" fill="none" />
+                            <path class="gauge-fill" id="gaugePath" d="M 10 50 A 40 40 0 0 1 90 50" fill="none" />
+                        </svg>
+                        <div class="gauge-value" id="probabilityValue">--%</div>
+                    </div>
+                    <div class="risk-badge" id="riskBadge">--</div>
+                    <div class="prediction-text" id="predictedClass"></div>
+                </div>
+
+                <div class="card chart-card">
+                    <h3>Risk Factors Impact</h3>
+                    <div class="chart-container">
+                        <canvas id="impactChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card factors-card">
+                <h3>Detailed Factor Analysis</h3>
+                <div id="factorsList" class="factors-list">
+                    <!-- Expanded cards injected here -->
+                </div>
+            </div>
+
+            <div class="card tips-card">
+                <h3>Healthy Lifestyle Tips</h3>
+                <div id="tipsList" class="tips-grid">
+                    <!-- Tips injected here based on top factors -->
+                </div>
+            </div>
+        </div>
+
+        <div class="how-it-works">
+            <h3>How it works</h3>
+            <p>Our deep learning model evaluates various lifestyle and genetic factors, comparing them against a baseline profile. It calculates the individual contribution of each factor to your overall risk estimate, helping you identify areas for potential lifestyle improvements.</p>
+        </div>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p class="disclaimer">Disclaimer: This is an educational tool and does not provide a medical diagnosis. Please consult a healthcare professional for medical advice.</p>
+        </div>
+    </footer>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>

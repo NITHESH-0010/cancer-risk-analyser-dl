@@ -1,333 +1,149 @@
-import streamlit as st
+from flask import Flask, render_template, request, jsonify
 import pandas as pd
 import numpy as np
 import os
 import sys
-import matplotlib.pyplot as plt
-import seaborn as sns
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src'))
-from model_io import load_encoder, load_dl_model
+base_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(base_dir, 'src'))
+
 from features import encode
-from explain_one import factor_contributions, what_if
+from model_io import load_encoder, load_dl_model
+from explain_one import factor_contributions
 
-st.set_page_config(page_title="Cancer Risk Analyser", layout="wide", page_icon="🩺")
+app = Flask(__name__)
 
-# Custom CSS
-st.markdown("""
-<style>
-    .stApp {
-        background: linear-gradient(135deg, #0a192f 0%, #172a45 100%);
-        color: #e6f1ff;
-    }
-    
-    .css-1d391kg, .css-18e3th9 { /* Sidebar / Tab headers */
-        background: transparent;
-    }
-    
-    div[data-testid="stVerticalBlock"] > div {
-        background: #112240;
-        border-radius: 12px;
-        padding: 20px;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-        margin-bottom: 20px;
-    }
-    
-    .block-container {
-        padding-bottom: 90px !important;
-    }
+# Global variables for model, encoder, and metrics
+model = None
+encoder = None
+model_accuracy = 0.0
+model_auc = 0.0
 
-    [data-testid="stWidgetLabel"] p, [data-testid="stWidgetLabel"] label {
-        color: #E6EEF8 !important;
-        font-weight: 500;
-    }
+def load_resources():
+    global model, encoder, model_accuracy, model_auc
     
-    h1, h2, h3, h4, h5, h6, .stMarkdown p {
-        color: #ccd6f6;
-    }
+    # Load model and encoder
+    model_path = os.path.join(base_dir, 'models', 'cancer_dl_model_v2.keras')
+    encoder_path = os.path.join(base_dir, 'models', 'feature_encoder.pkl')
     
-    .stButton>button {
-        background-color: #64ffda;
-        color: #0a192f;
-        border-radius: 8px;
-        font-weight: bold;
-        width: 100%;
-        border: none;
-    }
-    .stButton>button:hover {
-        background-color: #52e0c4;
-        color: #0a192f;
-    }
-    
-    .risk-card {
-        border-radius: 12px;
-        padding: 30px;
-        text-align: center;
-        color: #0a192f;
-        margin-bottom: 20px;
-        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
-    }
-    .risk-badge {
-        display: inline-block;
-        padding: 4px 12px;
-        border-radius: 12px;
-        font-weight: 600;
-        font-size: 1.2rem;
-        background-color: rgba(255, 255, 255, 0.2);
-        margin-bottom: 10px;
-    }
-    .risk-low { background: linear-gradient(135deg, #a8e063 0%, #56ab2f 100%); }
-    .risk-mod { background: linear-gradient(135deg, #ffd194 0%, #70e1f5 100%); /* Adjusted to more amber */ }
-    .risk-mod { background: linear-gradient(135deg, #f6d365 0%, #fda085 100%); }
-    .risk-high { background: linear-gradient(135deg, #ff4b2b 0%, #ff416c 100%); }
-    
-    .risk-score {
-        font-size: 3.5rem;
-        font-weight: 800;
-        margin: 10px 0;
-    }
-    .footer {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        width: 100%;
-        background-color: #020c1b;
-        color: #8892b0;
-        text-align: center;
-        padding: 10px;
-        font-size: 0.8rem;
-        z-index: 100;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-import plotly.graph_objects as go
-import plotly.express as px
-
-@st.cache_resource
-def get_model_and_encoder():
-    encoder = load_encoder('models/feature_encoder.pkl')
-    model = load_dl_model('models/cancer_dl_model_v2.keras')
-    return encoder, model
-
-@st.cache_data
-def get_data_ranges():
-    df = pd.read_csv("dataset/cancer_data.csv")
-    ranges = {}
-    for col in df.columns:
-        if col != 'Diagnosis':
-            ranges[col] = {
-                'min': float(df[col].min()),
-                'max': float(df[col].max()),
-                'mean': float(df[col].mean()),
-                'unique': df[col].dropna().unique().tolist()
-            }
-    return ranges
-
-@st.cache_data
-def load_metrics():
-    ablation = pd.read_csv("results/ablation.csv")
-    cv = pd.read_csv("results/cv_comparison.csv")
-    return ablation, cv
-
-try:
-    encoder, model = get_model_and_encoder()
-    ranges = get_data_ranges()
-    ablation_df, cv_df = load_metrics()
-except Exception as e:
-    st.error(f"Failed to load model, encoder, or data: {e}")
-    st.stop()
-
-# Header
-st.markdown("<h1>🩺 Cancer Risk Analyser DL</h1>", unsafe_allow_html=True)
-st.markdown("<h5>An interactive deep learning model for evaluating lifestyle and health factors.</h5>", unsafe_allow_html=True)
-
-tab1, tab2 = st.tabs(["Predict", "Model details"])
-
-with tab1:
-    
-    st.markdown("### Patient Data Input")
-    st.info("Note: 'Gender' was excluded from this model because it was identified as a non-causal dataset artifact.")
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        age = st.slider("Age", min_value=int(ranges['Age']['min']), max_value=int(ranges['Age']['max']), value=int(ranges['Age']['mean']))
-        bmi = st.slider("BMI", min_value=float(ranges['BMI']['min']), max_value=float(ranges['BMI']['max']), value=float(ranges['BMI']['mean']))
-        smoking = st.selectbox("Smoking (0=No, 1=Yes)", options=sorted([int(x) for x in ranges['Smoking']['unique']]))
-        
-    with col2:
-        genetic_risk = st.selectbox("Genetic Risk (0=Low, 1=Medium, 2=High)", options=sorted([int(x) for x in ranges['GeneticRisk']['unique']]))
-        physical_activity = st.slider("Physical Activity (hours/week)", min_value=float(ranges['PhysicalActivity']['min']), max_value=float(ranges['PhysicalActivity']['max']), value=float(ranges['PhysicalActivity']['mean']))
-        alcohol_intake = st.slider("Alcohol Intake (units/week)", min_value=float(ranges['AlcoholIntake']['min']), max_value=float(ranges['AlcoholIntake']['max']), value=float(ranges['AlcoholIntake']['mean']))
-        cancer_history = st.selectbox("Cancer History (0=No, 1=Yes)", options=sorted([int(x) for x in ranges['CancerHistory']['unique']]))
-        
-    if st.button("Predict Risk"):
-        input_data = pd.DataFrame([{
-            'Age': age,
-            'BMI': bmi,
-            'Smoking': smoking,
-            'GeneticRisk': genetic_risk,
-            'PhysicalActivity': physical_activity,
-            'AlcoholIntake': alcohol_intake,
-            'CancerHistory': cancer_history
-        }])
-        
-        def format_prob(p):
-            return f"{p * 100:.1f}%"
-            
-        # 1. Explanation Logic
-        # Update app to use probability diffs for the chart
-        p_full, contrib_lo, contributions_prob, p_base = factor_contributions(input_data, model, encoder)
-        what_if_res = what_if(input_data, model, encoder)
-        
-        st.markdown("---")
-        
-        # 2. Result Section
-        if p_full < 0.33:
-            risk_class = "risk-low"
-            risk_text = "Low"
-        elif p_full < 0.66:
-            risk_class = "risk-mod"
-            risk_text = "Moderate"
-        else:
-            risk_class = "risk-high"
-            risk_text = "Higher"
-            
-        st.markdown(f"""
-        <div class="risk-card {risk_class}">
-            <div class="risk-badge">Risk Band: {risk_text}</div>
-            <div class="risk-score">Predicted risk: {p_full * 100:.1f}%</div>
-        </div>
-        """, unsafe_allow_html=True)
-        st.progress(float(p_full))
-        
-        st.caption(f"Note: This score is a model output reflecting patterns in the data, not a calibrated real-world probability. (Baseline risk: {p_base * 100:.1f}%)")
-        
-        st.markdown("---")
-        st.markdown("### Factors behind this score")
-        st.caption("How each factor shifts the predicted risk relative to the average baseline profile.")
-        
-        # Plot contributions using Plotly
-        # Sort by absolute impact
-        items = list(contributions_prob.items())
-        items.sort(key=lambda x: abs(x[1]), reverse=False) # Ascending absolute value for horizontal bar chart
-        
-        features = [x[0] for x in items]
-        values = [x[1] * 100 for x in items]
-        colors = ['#ff416c' if v > 0 else '#56ab2f' for v in values]
-        texts = [f"+{v:.1f} pts" if v > 0 else f"{v:.1f} pts" for v in values]
-        
-        fig = go.Figure(go.Bar(
-            x=values,
-            y=features,
-            orientation='h',
-            marker_color=colors,
-            text=texts,
-            textposition='auto',
-        ))
-        
-        fig.update_layout(
-            margin=dict(l=20, r=20, t=30, b=20),
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            font=dict(color='#ccd6f6'),
-            xaxis_title="Percentage Points Impact on Risk",
-            height=400,
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # 2-3 sentences naming the top drivers and prevention tips
-        # Sort by actual risk-raising impact
-        sorted_raisers = sorted([i for i in items if i[1] > 0.01], key=lambda x: x[1], reverse=True)
-        
-        if len(sorted_raisers) > 0:
-            st.markdown("#### Top Risk-Raising Factors")
-            
-            tips = {
-                'Smoking': ("Smoking damages DNA and limits the body's ability to heal.", "Quitting smoking is the single best action to lower risk."),
-                'CancerHistory': ("Previous cancer treatments or genetics increase future risk.", "Keep up with regular screenings and medical check-ups."),
-                'GeneticRisk': ("Certain gene variants predispose cells to mutations.", "Discuss more frequent screenings with your doctor."),
-                'Age': ("Cellular damage accumulates over time.", "Focus on healthy aging with diet and exercise."),
-                'BMI': ("Higher BMI is linked to inflammation.", "Aim for a balanced diet and active lifestyle."),
-                'AlcoholIntake': ("Alcohol breaks down into harmful chemicals.", "Limit alcohol intake to moderate levels or avoid entirely."),
-                'PhysicalActivity': ("Low activity can affect hormones and immune function.", "Incorporate at least 150 minutes of moderate activity weekly.")
-            }
-            
-            for i in range(min(3, len(sorted_raisers))):
-                factor = sorted_raisers[i][0]
-                cause, tip = tips.get(factor, ("Contributes to risk patterns.", "Maintain healthy lifestyle habits."))
-                st.markdown(f"**{factor}:** {cause} **Tip:** {tip}")
-        else:
-            st.markdown("No significant risk-raising factors detected compared to the baseline.")
-        
-        st.markdown("---")
-        st.markdown("### Things you can change")
-        
-        st.markdown("**Modifiable Factors & Potential Impact**")
-        
-        def display_what_if(factor, text, key):
-            if key in what_if_res:
-                res = what_if_res[key]
-                new_p = res['p_new']
-                delta_lo = res['delta_lo']
-                
-                if delta_lo > 0.1:
-                    if new_p > 0.99:
-                        st.success(f"- **{factor}:** {text} The score stays very high even with this change, but the risk score still drops by {delta_lo:.2f} on the log-odds scale.")
-                    else:
-                        st.success(f"- **{factor}:** {text} Estimated new score: {format_prob(new_p)} (risk score drops by {delta_lo:.2f}).")
-                else:
-                    st.info(f"- **{factor}:** {text} Changing this factor shows no improvement in the model's score for your specific profile.")
-        
-        display_what_if("Smoking", "Stopping smoking generally supports better overall health.", "Smoking")
-        display_what_if("Alcohol Intake", "Moderating alcohol intake can contribute to long-term wellness.", "AlcoholIntake")
-        display_what_if("Physical Activity", "Regular physical activity is beneficial for a healthy lifestyle.", "PhysicalActivity")
-        display_what_if("BMI", "Maintaining a healthy weight can positively impact well-being.", "BMI")
-        
-        if 'Combined' in what_if_res:
-            res_c = what_if_res['Combined']
-            new_p_c = res_c['p_new']
-            st.markdown(f"**Combined Impact:** Adopting all applicable lifestyle changes above could shift the score to **{format_prob(new_p_c)}**.")
-            
-        st.markdown("**Not changeable:**")
-        st.markdown("Age, Genetic Risk, and Cancer History are fixed factors.")
-        
-with tab2:
-    st.header("Model Details")
-    
-    st.subheader("Model Reliability")
-    st.info("The metrics below represent the model's overall performance on the dataset, not the accuracy of a single prediction.")
-    
-    encoded_mlp_test = ablation_df[ablation_df['Model'] == 'MLP encoded features'].iloc[0]
-    encoded_mlp_cv = cv_df[cv_df['Model'] == 'MLP encoded features'].iloc[0]
-    
-    st.write(f"- **Test Set Accuracy:** {encoded_mlp_test['Accuracy']}")
-    st.write(f"- **Test Set F1 Score:** {encoded_mlp_test['F1 Score']}")
-    st.write(f"- **Test Set ROC-AUC:** {encoded_mlp_test['ROC-AUC']}")
-    st.write(f"- **5-Fold CV Accuracy:** {encoded_mlp_cv['Accuracy (CV)']}")
-    st.write(f"- **5-Fold CV ROC-AUC:** {encoded_mlp_cv['ROC-AUC (CV)']}")
-    
-    st.markdown("---")
-    
-    st.subheader("Performance Comparison")
-    c1, c2 = st.columns(2)
-    with c1:
-        st.write("**Test Split Results**")
-        st.dataframe(ablation_df, hide_index=True)
-    with c2:
-        st.write("**5-Fold Cross-Validation Results**")
-        st.dataframe(cv_df, hide_index=True)
-        
-    st.subheader("Feature Importance")
-    st.write("Permutation importance computed at the raw-feature level.")
-    if os.path.exists("results/permutation_importance_v2.png"):
-        st.image("results/permutation_importance_v2.png")
+    if os.path.exists(model_path) and os.path.exists(encoder_path):
+        model = load_dl_model(model_path)
+        encoder = load_encoder(encoder_path)
     else:
-        st.write("Feature importance plot not found.")
+        print("Model or encoder not found. Please train the model first.")
+        
+    # Load metrics
+    metrics_path = os.path.join(base_dir, 'results', 'final_metrics.csv')
+    if os.path.exists(metrics_path):
+        metrics_df = pd.read_csv(metrics_path)
+        mlp_row = metrics_df[metrics_df['Model'] == 'Encoded MLP']
+        if not mlp_row.empty:
+            model_accuracy = mlp_row.iloc[0]['Accuracy'] * 100
+            model_auc = mlp_row.iloc[0]['ROC-AUC']
+            
+load_resources()
 
-st.markdown("""
-<div class="footer">
-    Trained on a probably synthetic Kaggle dataset; not clinically validated and not medical advice. Scores are model outputs, not diagnoses.
-</div>
-""", unsafe_allow_html=True)
+PRECAUTIONS = {
+    'Age': 'Regular screenings and check-ups are recommended as risk naturally increases with age.',
+    'BMI': 'Maintain a balanced diet and consult a nutritionist to achieve a healthy weight.',
+    'Smoking': 'Consider enrolling in a smoking cessation program to reduce risk significantly.',
+    'GeneticRisk': 'Discuss regular specialized screenings or genetic counseling with your doctor.',
+    'PhysicalActivity': 'Aim for at least 150 minutes of moderate aerobic activity every week.',
+    'AlcoholIntake': 'Limit alcohol consumption following national health guidelines.',
+    'CancerHistory': 'Ensure rigorous follow-up appointments and monitoring with your oncologist.'
+}
+
+REASONS = {
+    'Age': 'Advanced age is a natural risk factor.',
+    'BMI': 'Higher BMI can contribute to metabolic stress.',
+    'Smoking': 'Smoking introduces carcinogens into the body.',
+    'GeneticRisk': 'Inherited mutations can increase susceptibility.',
+    'PhysicalActivity': 'Low activity levels affect overall immunity and health.',
+    'AlcoholIntake': 'High alcohol intake is linked to cell damage.',
+    'CancerHistory': 'Previous history increases the likelihood of recurrence.'
+}
+
+def get_risk_band(prob):
+    if prob < 33:
+        return 'Low'
+    elif prob < 66:
+        return 'Moderate'
+    else:
+        return 'High'
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/predict', methods=['POST'])
+def predict():
+    try:
+        data = request.get_json()
+        
+        # Accept Gender but ignore it
+        _ = data.get('Gender', 'Other')
+        
+        # Extract features
+        features = ['Age', 'BMI', 'Smoking', 'GeneticRisk', 'PhysicalActivity', 'AlcoholIntake', 'CancerHistory']
+        row = {}
+        for f in features:
+            if f not in data or data[f] is None:
+                return jsonify({'error': f'Missing value for {f}'}), 400
+            
+            try:
+                val = float(data[f])
+            except ValueError:
+                return jsonify({'error': f'Invalid value for {f}'}), 400
+                
+            row[f] = val
+            
+        # Basic validation
+        if not (0 <= row['Age'] <= 120):
+            return jsonify({'error': 'Age must be between 0 and 120'}), 400
+        if not (10 <= row['BMI'] <= 60):
+            return jsonify({'error': 'BMI must be between 10 and 60'}), 400
+        if row['PhysicalActivity'] < 0:
+            return jsonify({'error': 'Physical Activity cannot be negative'}), 400
+        if row['AlcoholIntake'] < 0:
+            return jsonify({'error': 'Alcohol Intake cannot be negative'}), 400
+            
+        df_row = pd.DataFrame([row])
+        
+        # Explain and predict
+        p_full, _, contributions_prob, _ = factor_contributions(df_row, model, encoder)
+        
+        probability = p_full * 100
+        
+        # Sort contributions by absolute impact
+        contribs_list = []
+        for f, impact in contributions_prob.items():
+            pts = impact * 100
+            contribs_list.append({
+                'name': f,
+                'points': round(pts, 1),
+                'abs_points': abs(pts),
+                'reason': REASONS.get(f, 'Affects cancer risk.'),
+                'precaution': PRECAUTIONS.get(f, 'Consult your doctor for advice.')
+            })
+            
+        contribs_list.sort(key=lambda x: x['abs_points'], reverse=True)
+        
+        # Format for output
+        for c in contribs_list:
+            del c['abs_points']
+            
+        return jsonify({
+            'probability': round(probability, 1),
+            'risk_band': get_risk_band(probability),
+            'predicted_class': 1 if probability >= 50 else 0,
+            'model_accuracy': round(model_accuracy, 1),
+            'model_auc': round(model_auc, 3),
+            'contributions': contribs_list
+        })
+        
+    except Exception as e:
+        print(f"Error during prediction: {e}")
+        return jsonify({'error': 'Internal server error during prediction'}), 500
+
+if __name__ == '__main__':
+    app.run(debug=True, port=5000)

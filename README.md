@@ -13,7 +13,7 @@ The final model deployed in this app is an **Average Ensemble** of a tuned Gradi
    ```
 2. Start the local Flask server:
    ```bash
-   python app_web.py
+   python app.py
    ```
 3. Open `http://127.0.0.1:5000` in your browser.
 

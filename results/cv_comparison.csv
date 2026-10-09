@@ -1,6 +1,6 @@
 Model,Accuracy (CV),ROC-AUC (CV)
-Logistic Regression,0.8473 +/- 0.0183,0.9179 +/- 0.0134
-Random Forest,0.9227 +/- 0.0071,0.9508 +/- 0.0113
-Gradient Boosting,0.9307 +/- 0.0083,0.9531 +/- 0.0119
-MLP (DL),0.8820 +/- 0.0105,0.9391 +/- 0.0133
-MLP encoded features,0.9120 +/- 0.0117,0.9510 +/- 0.0095
+Logistic Regression,0.8193 +/- 0.0174,0.8844 +/- 0.0134
+Random Forest,0.8460 +/- 0.0205,0.9109 +/- 0.0127
+Gradient Boosting,0.8420 +/- 0.0177,0.9170 +/- 0.0122
+MLP (DL),0.8347 +/- 0.0207,0.9005 +/- 0.0124
+MLP encoded features,0.8333 +/- 0.0202,0.9051 +/- 0.0124
